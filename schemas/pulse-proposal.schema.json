@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/pulse-proposal.schema.json",
+  "title": "Structured deterministic daily pulse proposal",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "status",
+    "date",
+    "candidate_release_id",
+    "analysis_id",
+    "analysis_fingerprint",
+    "proposal_fingerprints",
+    "proposal_fingerprint",
+    "reason"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "status": {
+      "type": "string",
+      "enum": ["no_update", "review_required", "selected"]
+    },
+    "date": {"$ref": "common.schema.json#/$defs/calendarDate"},
+    "candidate_release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "analysis_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "analysis_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+    "proposal_fingerprints": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/sha256"}
+    },
+    "proposal_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+    "reason": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1},
+    "lead": {"type": "string", "minLength": 1},
+    "topics": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "featured_artifact": {"$ref": "common.schema.json#/$defs/identifier"},
+    "artifact_manifest": {
+      "type": "string",
+      "pattern": "^/artifacts/[A-Za-z0-9._~/-]+/manifest\\.json$"
+    },
+    "source_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "knowledge_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "signals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/signal"}
+    },
+    "why_this_matters": {"type": "string", "minLength": 1},
+    "unresolved_question": {"type": "string", "minLength": 1},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/source"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "selected"}}},
+      "then": {
+        "required": [
+          "title",
+          "lead",
+          "topics",
+          "featured_artifact",
+          "artifact_manifest",
+          "source_ids",
+          "knowledge_ids",
+          "signals",
+          "why_this_matters",
+          "unresolved_question",
+          "sources"
+        ],
+        "properties": {"proposal_fingerprints": {"minItems": 1, "maxItems": 3}}
+      },
+      "else": {
+        "properties": {"proposal_fingerprints": {"maxItems": 0}}
+      }
+    }
+  ],
+  "$defs": {
+    "evidenceLink": {
+      "type": "string",
+      "pattern": "^\\[[^\\]\\r\\n]+\\]\\(/sources#[a-z][a-z0-9._-]*\\)$"
+    },
+    "signal": {
+      "type": "object",
+      "required": [
+        "heading",
+        "proposal_fingerprint",
+        "what_changed",
+        "why_it_matters",
+        "evidence",
+        "confidence",
+        "assumptions"
+      ],
+      "properties": {
+        "heading": {"type": "string", "minLength": 1},
+        "proposal_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+        "what_changed": {"type": "string", "minLength": 1},
+        "why_it_matters": {"type": "string", "minLength": 1},
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/evidenceLink"}
+        },
+        "confidence": {"type": "string", "minLength": 1},
+        "assumptions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "limitations": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["source_id", "label", "locator"],
+      "properties": {
+        "source_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "label": {"type": "string", "minLength": 1},
+        "locator": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

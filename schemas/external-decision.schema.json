@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/external-decision.schema.json",
+  "title": "Append-only external source review decision",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "decision_sha256",
+    "batch_id",
+    "candidate_id",
+    "candidate_sha256",
+    "decision",
+    "reviewer",
+    "reason",
+    "decided_at",
+    "rights"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "id": {"type": "string", "pattern": "^external-decision-[0-9a-f]{20}$"},
+    "decision_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "batch_id": {"type": "string", "pattern": "^external-batch-[0-9a-f]{20}$"},
+    "candidate_id": {"type": "string", "pattern": "^candidate-arxiv-[0-9a-f]{20}$"},
+    "candidate_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decision": {"enum": ["approved", "rejected"]},
+    "reviewer": {"type": "string", "minLength": 1, "maxLength": 300},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "decided_at": {"type": "string", "format": "date-time"},
+    "rights": {
+      "type": "object",
+      "required": ["license", "reuse_status", "public_distribution"],
+      "properties": {
+        "license": {"type": "string", "minLength": 1, "maxLength": 300},
+        "reuse_status": {
+          "enum": ["internal_only", "unknown", "cleared", "restricted", "public_domain", "not_applicable"]
+        },
+        "public_distribution": {"type": "boolean"},
+        "notes": {"type": "string", "maxLength": 2000}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

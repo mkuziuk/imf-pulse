@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/source.schema.json",
+  "title": "IMF Pulse source record",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "title",
+    "authors",
+    "date",
+    "source_type",
+    "authority_level",
+    "publication_status",
+    "topics",
+    "rights",
+    "content_sha256",
+    "limitations",
+    "retrieved_at",
+    "last_processed_at",
+    "extractor"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "title": {"type": "string", "minLength": 1},
+    "authors": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "date": {"$ref": "common.schema.json#/$defs/sourceDate"},
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "published_primary_paper",
+        "preprint",
+        "internal_theory_draft",
+        "local_notebook",
+        "numerical_experiment",
+        "implementation",
+        "tex_manuscript",
+        "dataset",
+        "technical_documentation",
+        "secondary_commentary"
+      ]
+    },
+    "root_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "path": {"$ref": "common.schema.json#/$defs/relativePath"},
+    "relative_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+    "url": {"type": "string", "format": "uri"},
+    "location": {"type": "string", "minLength": 1},
+    "snapshot_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "snapshot_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+    "topics": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "authority_level": {
+      "type": "string",
+      "enum": ["published_primary", "preprint_unreviewed", "internal_unverified", "internal_reviewed", "implementation_evidence", "derived_reproducible", "secondary"]
+    },
+    "publication_status": {
+      "type": "string",
+      "enum": ["published", "accepted", "preprint", "unpublished", "working_draft", "withdrawn", "not_applicable"]
+    },
+    "rights": {"$ref": "common.schema.json#/$defs/sourceRights"},
+    "rights_status": {"type": "string", "minLength": 1},
+    "content_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "content_hash": {"$ref": "common.schema.json#/$defs/sha256"},
+    "content_size_bytes": {"type": "integer", "minimum": 0},
+    "config_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "processing_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+    "retrieved_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "last_processed_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "extractor": {"type": "string", "minLength": 1},
+    "extract_semantic_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "status": {"type": "string", "enum": ["available", "missing", "failed", "superseded"]},
+    "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "version_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["content_sha256", "first_seen_at"],
+        "properties": {
+          "content_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+          "first_seen_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+          "last_seen_at": {"$ref": "common.schema.json#/$defs/timestamp"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "anyOf": [
+    {"required": ["path"]},
+    {"required": ["relative_path"]},
+    {"required": ["url"]}
+  ],
+  "additionalProperties": false
+}

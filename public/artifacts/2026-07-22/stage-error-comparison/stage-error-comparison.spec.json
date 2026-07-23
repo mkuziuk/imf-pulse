@@ -1,0 +1,125 @@
+{
+  "artifact_id": "imf-stage-error-comparison-2026-07-22",
+  "data": {
+    "format": "csv",
+    "normalized_shape": "long",
+    "url": "/artifacts/2026-07-22/stage-error-comparison/stage-error-comparison.csv"
+  },
+  "description": "Stage-wise comparison of exact single-pass and exact recursive finite-n scaled RMS with one stored seed-777 recursive realization.",
+  "encoding": {
+    "color": {
+      "field": "series_id",
+      "legend": true,
+      "type": "nominal"
+    },
+    "detail": {
+      "fields": [
+        "estimand",
+        "evidence_status",
+        "source_locator"
+      ]
+    },
+    "x": {
+      "field": "stage",
+      "label": "IMF stage k",
+      "sort": "ascending",
+      "type": "ordinal"
+    },
+    "y": {
+      "domain": [
+        0.004,
+        0.022
+      ],
+      "field": "value",
+      "label": "RMS / a^(k/2)",
+      "type": "quantitative",
+      "zero": false
+    }
+  },
+  "format": "imf-pulse-declarative-chart-v1",
+  "interactions": {
+    "responsive": true,
+    "tooltip_fields": [
+      "series_label",
+      "stage",
+      "window_size",
+      "value",
+      "estimand",
+      "evidence_status"
+    ]
+  },
+  "layers": [
+    {
+      "filter": {
+        "series_id": "exact_single_pass"
+      },
+      "mark": {
+        "line": "solid",
+        "marker": "circle-filled",
+        "stroke": "ink"
+      }
+    },
+    {
+      "filter": {
+        "series_id": "exact_recursive"
+      },
+      "mark": {
+        "line": "solid",
+        "marker": "square-filled",
+        "stroke": "spectral-accent"
+      }
+    },
+    {
+      "filter": {
+        "series_id": "seed777_recursive"
+      },
+      "mark": {
+        "line": "dash",
+        "marker": "circle-hollow",
+        "stroke": "spectral-accent"
+      }
+    }
+  ],
+  "reference_annotations": [
+    {
+      "label": "Initial low-pass; component DC gain = 1",
+      "stage": 1,
+      "type": "stage-band"
+    },
+    {
+      "from_stage": 2,
+      "label": "Recursive details; component DC gain = 0",
+      "to_stage": 9,
+      "type": "stage-range"
+    }
+  ],
+  "schema_version": 1,
+  "series": [
+    {
+      "estimand": "sqrt(E[RMSE^2])",
+      "evidence_status": "calculated_exact_under_assumptions",
+      "id": "exact_single_pass",
+      "label": "Exact single-pass"
+    },
+    {
+      "estimand": "sqrt(E[RMSE^2])",
+      "evidence_status": "calculated_exact_under_assumptions",
+      "id": "exact_recursive",
+      "label": "Exact recursive"
+    },
+    {
+      "estimand": "realized_RMSE",
+      "evidence_status": "observed_single_realization",
+      "id": "seed777_recursive",
+      "label": "Seed 777 recursive"
+    }
+  ],
+  "summary_statistics": {
+    "exact_recursive_stage1": "0.020181621597744833",
+    "exact_recursive_stage1_to_tail_ratio": "2.9783393026694611",
+    "exact_recursive_stages2_9_mean": "0.0067761324506097108",
+    "exact_single_pass_scaled_cv": "0.0065413861916384011",
+    "exact_single_pass_scaled_mean": "0.020265660781302285"
+  },
+  "title": "The first stage is not the same filter"
+}

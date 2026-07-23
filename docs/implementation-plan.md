@@ -1,0 +1,77 @@
+# Implemented Phase 1–5 architecture
+
+The Residual remains a file-based local MVP. It has no application server, database, vector index, broad crawler, automatic paper ingestion, or unattended public publisher.
+
+## Phase 1 — editorial site and artifact rendering
+
+- `src/main.tsx`, `src/App.tsx`, and `src/pages/` implement Latest, Archive, Research map, Artifacts, Sources, and the error route. `/` opens the latest accepted pulse.
+- `src/styles/` provides the warm journal palette, spectral accent, editorial grid, responsive layout, reduced-motion handling, focus states, and print treatment.
+- `src/components/MarkdownRenderer.tsx` renders GFM, KaTeX, safe Mermaid diagrams, citations, and figures without raw HTML.
+- `src/components/ScientificChart.tsx` renders responsive scientific charts with accessible tables and deterministic SVG fallback.
+- `content-bundle.ts` and `release-env.ts` authorize only validated accepted content at build time. `VITE_ROUTER_MODE=hash` and `VITE_BASE_PATH` support a GitHub Pages project site.
+- `content/pulses/2026-07-22.md` and its chart are the realistic first report and artifact.
+
+## Phase 2 — curated local intelligence
+
+- `config/sources.yaml` registers explicit relative paths beneath `$IMF_SOURCE_ROOT` (default `../imf`) with source class, authority, publication state, topics, rights, limitations, and extractor.
+- `research_pipeline/paths.py`, `hashing.py`, and `snapshot.py` enforce no-follow reads, stable byte hashing, immutable private snapshots, and source/output containment.
+- `research_pipeline/extractors.py` statically extracts bounded PDF page text, Markdown/TeX/Python lines, notebook cells and safe stored text outputs, CSV rows, and JSON pointers. It never executes source material.
+- `research_pipeline/release.py` builds immutable source/knowledge releases, validates cross-references and provenance, binds accepted publication bytes, runs gates, writes immutable run records, and replaces `data/current.json` last.
+- `knowledge/curated/` contains reviewed claim, method, experiment, and relationship seeds. `evaluation/benchmark.yaml` contains the ten evidence-cited benchmark questions.
+- `scripts/sync_local_sources.py`, `export_local_snapshot.py`, `ingest_sources.py`, `validate_pulse.py`, and `publish_pulse.py` expose the lower-level manual workflow.
+
+## Phase 3 — deterministic novelty and daily proposals
+
+- `research_pipeline/novelty.py` compares two immutable releases, classifies source and knowledge changes, ranks evidence-backed additions with deterministic integer scoring, flags contradictions and target drift, deduplicates prior proposal fingerprints, and selects no more than three signals.
+- Change outcomes are `no_update`, `review_required`, or `selected`. Deletions, modified accepted objects, unevidenced additions, source-only changes, and bootstrap ambiguity are never silently promoted.
+- `schemas/change-analysis.schema.json` and `schemas/pulse-proposal.schema.json` define the review objects.
+- `research_pipeline/pulse_builder.py` validates a reviewed proposal bound to the exact analysis/release and renders one immutable 350–650 word Markdown pulse with exactly one artifact. It refuses overwrite.
+- `scripts/build_daily_pulse.py` writes deterministic analysis and can render an already reviewed proposal. It does not generate, approve, or publish prose by itself.
+- `prompts/` contains active but review-only extraction, change-analysis, and pulse-drafting contracts. Prompt output cannot mutate accepted knowledge or checkpoints.
+
+## Phase 4 — bounded external metadata monitoring
+
+- `config/external-sources.yaml` fixes the arXiv Atom HTTPS endpoint, allowed host, query vocabulary, date windows, result limits, response size, timeout, and receipt/review paths.
+- `research_pipeline/external.py` parses XML with DTD/entity rejection, normalizes versioned arXiv metadata, writes immutable private Atom receipts and hash-bound candidate batches, and never exposes a full-text download or code-execution path.
+- `scripts/search_external_sources.py --as-of ...` performs deterministic discovery. New candidates are pending, never accepted evidence.
+- `scripts/review_external_source.py` appends one explicit `approved` or `rejected` decision bound to the batch, candidate ID, candidate SHA-256, reviewer, timestamp, rationale, and rights record. Existing decisions cannot be replaced.
+- `scripts/compare_knowledge.py` compares manually prepared controlled profiles. It reports different definitions, different targets, exact-scope contradictions, and missing/scope review gaps; every finding still requires review.
+- `schemas/external-{candidate,batch,decision}.schema.json` and `schemas/comparison-finding.schema.json` define these records.
+
+External approval does not download a paper, extract claims, edit curated knowledge, or publish a pulse. Those remain explicit review steps.
+
+## Phase 5 — one local daily transaction and scheduling contract
+
+- `research_pipeline/daily.py` and `scripts/run_daily_pipeline.py` provide the single `--mode live --date YYYY-MM-DD` transaction.
+- Preflight requires the reviewed source, external, report, extraction, and scheduling policies. The command acquires a non-blocking local lock, reads the checkpoint, syncs allowlisted local bytes, monitors metadata, builds a candidate release, performs novelty analysis, requires exact review objects, and invokes the existing atomic publisher.
+- The stable result contract is `published`, `no_update`, `review_required`, `blocked`, or `failed`, with run/release identity, checkpoint effects, evidence IDs, and pending-review path.
+- Pending external candidates stop the run at `review_required`. A selected local development without its exact reviewed pulse proposal also stops at `review_required`. No-update runs create no report.
+- The Codex desktop scheduled task runs independently at 08:00 `Europe/Moscow` in local mode. It invokes only the daily command and never commits, pushes, deploys, or changes repository/hosting settings.
+
+The scheduling declaration in `config/pulse.yaml` is a reviewed policy prerequisite, not a system scheduler installer.
+
+## Public release and GitHub Pages
+
+- Private `imports/`, `data/releases/`, `data/runs/`, extracts, source documents, and build caches are excluded from Git and deployment.
+- `scripts/export_public_release.py` atomically constructs `public-release/` from the current validated release: sanitized current metadata, five knowledge JSONL files, accepted pulses, and cleared artifact files only.
+- `scripts/audit_public_release.py` verifies the manifest allowlist and every hash, rights decision, path, file type, and public-data rule. The Vite content plugin repeats the boundary at build time.
+- `.github/workflows/pages.yml` re-audits the public export, runs Pytest and Vitest, builds with `/imf-pulse/` and hash routing, rejects source maps, and deploys only `dist/` through GitHub Pages.
+- A reviewed push to `main` or explicit workflow dispatch is the manual public-publish action. The research pipeline cannot trigger it.
+
+## Data layout
+
+- `imports/imf/snapshots/` — private immutable allowlisted source bytes.
+- `data/releases/` — private immutable validated research and publication releases.
+- `data/current.json` — the sole accepted-release checkpoint.
+- `data/runs/` — immutable local publication outcomes.
+- `data/review/` — change analyses, pulse proposals, and append-only external decisions.
+- `tmp/external-receipts/` — private immutable provider responses.
+- `data/external/batches/` — normalized metadata candidate queues.
+- `public-release/` — the only research-content input authorized for public builds.
+
+## Verification
+
+- Python: path/source immutability, static extraction, schema and evidence references, release identity, checkpoint rollback, novelty, proposal rendering, external metadata/review/comparison, daily statuses, and public export boundary.
+- Frontend: route/default content, Markdown/math, safe Mermaid, chart fallback, provenance, responsive navigation, and sealed build selection.
+- Required commands: `.venv/bin/python -m pytest`, `npm test`, `npm run build`, and `.venv/bin/python scripts/audit_public_release.py --directory public-release` before public publication.
+- Visual checks: desktop and mobile routes, overflow, links/assets, focus, contrast, reduced motion, and console errors.

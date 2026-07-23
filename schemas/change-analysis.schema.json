@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/change-analysis.schema.json",
+  "title": "Deterministic IMF Pulse release-change analysis",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "status",
+    "base_release_id",
+    "candidate_release_id",
+    "base_semantic_fingerprint",
+    "candidate_semantic_fingerprint",
+    "policy",
+    "prior_proposal_fingerprints",
+    "source_changes",
+    "knowledge_changes",
+    "ranked_candidates",
+    "selected_candidate_fingerprints",
+    "reason_codes",
+    "analysis_fingerprint"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "status": {
+      "type": "string",
+      "enum": ["no_update", "review_required", "selected"]
+    },
+    "base_release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "candidate_release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "base_semantic_fingerprint": {
+      "oneOf": [
+        {"$ref": "common.schema.json#/$defs/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "candidate_semantic_fingerprint": {
+      "oneOf": [
+        {"$ref": "common.schema.json#/$defs/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "policy": {"$ref": "#/$defs/policy"},
+    "prior_proposal_fingerprints": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/sha256"}
+    },
+    "source_changes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sourceChange"}
+    },
+    "knowledge_changes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/knowledgeChange"}
+    },
+    "ranked_candidates": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/candidate"}
+    },
+    "selected_candidate_fingerprints": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/sha256"}
+    },
+    "reason_codes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+    },
+    "analysis_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "selected"}}},
+      "then": {
+        "properties": {
+          "selected_candidate_fingerprints": {"minItems": 1, "maxItems": 3}
+        }
+      },
+      "else": {
+        "properties": {
+          "selected_candidate_fingerprints": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "basisPoints": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "nullableHash": {
+      "oneOf": [
+        {"$ref": "common.schema.json#/$defs/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "required": [
+        "materiality_threshold_basis_points",
+        "max_signals",
+        "require_evidence",
+        "base_score_basis_points",
+        "evidence_weight_basis_points",
+        "confidence_weight_basis_points",
+        "default_confidence_basis_points",
+        "contradiction_bonus_basis_points",
+        "different_target_bonus_basis_points",
+        "scoring_version"
+      ],
+      "properties": {
+        "materiality_threshold_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "max_signals": {"type": "integer", "minimum": 1, "maximum": 3},
+        "require_evidence": {"type": "boolean"},
+        "base_score_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "evidence_weight_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "confidence_weight_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "default_confidence_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "contradiction_bonus_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "different_target_bonus_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "scoring_version": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "sourceChange": {
+      "type": "object",
+      "required": [
+        "id",
+        "source_id",
+        "classification",
+        "previous_content_sha256",
+        "current_content_sha256",
+        "previous_semantic_sha256",
+        "current_semantic_sha256",
+        "fingerprint"
+      ],
+      "properties": {
+        "id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "source_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "classification": {
+          "type": "string",
+          "enum": ["added", "removed", "byte_only", "semantic", "metadata_only"]
+        },
+        "previous_content_sha256": {"$ref": "#/$defs/nullableHash"},
+        "current_content_sha256": {"$ref": "#/$defs/nullableHash"},
+        "previous_semantic_sha256": {"$ref": "#/$defs/nullableHash"},
+        "current_semantic_sha256": {"$ref": "#/$defs/nullableHash"},
+        "fingerprint": {"$ref": "common.schema.json#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "knowledgeChange": {
+      "type": "object",
+      "required": [
+        "object_type",
+        "object_id",
+        "classification",
+        "previous_semantic_sha256",
+        "current_semantic_sha256",
+        "evidence_count",
+        "source_ids"
+      ],
+      "properties": {
+        "object_type": {
+          "type": "string",
+          "enum": ["claim", "method", "experiment", "relationship"]
+        },
+        "object_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "classification": {
+          "type": "string",
+          "enum": ["added", "removed", "modified"]
+        },
+        "previous_semantic_sha256": {"$ref": "#/$defs/nullableHash"},
+        "current_semantic_sha256": {"$ref": "#/$defs/nullableHash"},
+        "evidence_count": {"type": "integer", "minimum": 0},
+        "source_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "common.schema.json#/$defs/identifier"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "scoreComponents": {
+      "type": "object",
+      "required": [
+        "base_basis_points",
+        "evidence_basis_points",
+        "confidence_basis_points",
+        "contradiction_bonus_basis_points",
+        "different_target_bonus_basis_points"
+      ],
+      "properties": {
+        "base_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "evidence_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "confidence_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "contradiction_bonus_basis_points": {"$ref": "#/$defs/basisPoints"},
+        "different_target_bonus_basis_points": {"$ref": "#/$defs/basisPoints"}
+      },
+      "additionalProperties": false
+    },
+    "candidate": {
+      "type": "object",
+      "required": [
+        "proposal_fingerprint",
+        "object_type",
+        "object_id",
+        "record_sha256",
+        "source_ids",
+        "evidence_fingerprints",
+        "evidence_count",
+        "flags",
+        "score_components",
+        "score_basis_points"
+      ],
+      "properties": {
+        "proposal_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+        "object_type": {
+          "type": "string",
+          "enum": ["claim", "method", "experiment", "relationship"]
+        },
+        "object_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "record_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+        "source_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "common.schema.json#/$defs/identifier"}
+        },
+        "evidence_fingerprints": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "common.schema.json#/$defs/sha256"}
+        },
+        "evidence_count": {"type": "integer", "minimum": 0},
+        "flags": {
+          "type": "object",
+          "required": ["contradiction", "different_target"],
+          "properties": {
+            "contradiction": {"type": "boolean"},
+            "different_target": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        },
+        "score_components": {"$ref": "#/$defs/scoreComponents"},
+        "score_basis_points": {"$ref": "#/$defs/basisPoints"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

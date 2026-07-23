@@ -1,0 +1,50 @@
+version: 1
+
+# Phase 4 is deliberately a bounded metadata monitor, not a crawler.  The
+# endpoint, host, query vocabulary, date window, and result limits are all
+# fixed here and validated before any request is made.
+policy:
+  metadata_only: true
+  download_full_text: false
+  allowed_schemes: [https]
+  allowed_hosts: [export.arxiv.org]
+  reject_redirects: true
+  max_queries: 3
+  max_results_per_query: 20
+  max_lookback_days: 30
+  timeout_seconds: 15
+  max_response_bytes: 2097152
+  minimum_request_interval_seconds: 3
+  user_agent: The-Residual/0.1 (local research monitor; metadata only)
+  private_receipt_root: tmp/external-receipts
+  candidate_batch_root: data/external/batches
+  decision_ledger: data/review/external-decisions.jsonl
+
+providers:
+  arxiv:
+    endpoint: https://export.arxiv.org/api/query
+    response_media_types:
+      - application/atom+xml
+      - application/xml
+      - text/xml
+
+queries:
+  - id: arxiv-iterative-filtering
+    provider: arxiv
+    terms:
+      - iterative filtering
+      - intrinsic mode filtering
+      - robust iterative filtering
+    categories: [eess.SP, math.ST, stat.ME]
+    max_results: 20
+    lookback_days: 14
+
+  - id: arxiv-robust-local-estimation
+    provider: arxiv
+    terms:
+      - robust local estimation
+      - local M-estimation
+      - contamination model signal estimation
+    categories: [eess.SP, math.ST, stat.ME]
+    max_results: 20
+    lookback_days: 14

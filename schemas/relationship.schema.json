@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/relationship.schema.json",
+  "title": "IMF Pulse knowledge relationship",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "created_at",
+    "updated_at",
+    "predicate",
+    "from",
+    "to",
+    "qualification",
+    "confidence",
+    "evidence"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "created_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "updated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "predicate": {
+      "type": "string",
+      "enum": [
+        "supports",
+        "contradicts",
+        "extends",
+        "implements",
+        "approximates",
+        "depends-on",
+        "uses-different-target",
+        "valid-only-under",
+        "reproduces",
+        "fails-to-reproduce"
+      ]
+    },
+    "from": {"$ref": "common.schema.json#/$defs/entityReference"},
+    "to": {"$ref": "common.schema.json#/$defs/entityReference"},
+    "qualification": {"type": "string", "minLength": 1},
+    "confidence": {"$ref": "common.schema.json#/$defs/confidence"},
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "evidence.schema.json#/$defs/evidenceReference"}
+    },
+    "notes": {"type": "string"}
+  },
+  "additionalProperties": false
+}

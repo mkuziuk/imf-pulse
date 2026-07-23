@@ -1,0 +1,22 @@
+:root {
+  color-scheme: light;
+  --paper: #f3efe4;
+  --paper-raised: #faf7ef;
+  --ink: #161a19;
+  --muted: #626862;
+  --rule: #c9c5b8;
+  --rule-strong: #96988f;
+  --accent: #00776f;
+  --accent-bright: #00a99d;
+  --accent-wash: rgba(0, 124, 118, 0.08);
+  --warning-pattern: rgba(22, 26, 25, 0.05);
+  --font-editorial: "Source Serif 4", Georgia, serif;
+  --font-interface: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --page-gutter: clamp(1.25rem, 5.2vw, 5.5rem);
+  --grid-gap: clamp(1rem, 2vw, 2rem);
+  --header-height: 4.75rem;
+  --content-max: 100rem;
+  --focus-ring: 0 0 0 3px var(--paper), 0 0 0 6px var(--accent);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}

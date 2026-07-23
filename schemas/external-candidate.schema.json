@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/external-candidate.schema.json",
+  "title": "External metadata candidate",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "candidate_sha256",
+    "provider",
+    "external_id",
+    "versioned_external_id",
+    "version",
+    "title",
+    "authors",
+    "published_at",
+    "updated_at",
+    "categories",
+    "doi",
+    "canonical_url",
+    "abstract_sha256",
+    "source_type",
+    "publication_status",
+    "rights_status",
+    "review_status",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "id": {"type": "string", "pattern": "^candidate-arxiv-[0-9a-f]{20}$"},
+    "candidate_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "provider": {"const": "arxiv"},
+    "external_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "versioned_external_id": {"type": "string", "minLength": 1, "maxLength": 110},
+    "version": {"type": "integer", "minimum": 1},
+    "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "authors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "published_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]*(?:\\.[A-Za-z0-9-]+)+$"}
+    },
+    "doi": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^10\\.[0-9]{4,9}/\\S+$", "maxLength": 300}
+      ]
+    },
+    "canonical_url": {"type": "string", "pattern": "^https://arxiv\\.org/abs/[^?#]+$"},
+    "abstract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_type": {"const": "preprint"},
+    "publication_status": {"const": "preprint"},
+    "rights_status": {"const": "unknown"},
+    "review_status": {"const": "pending"},
+    "provenance": {
+      "type": "object",
+      "required": ["query_ids", "receipts"],
+      "properties": {
+        "query_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9-]+$"}
+        },
+        "receipts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["query_id", "response_sha256", "entry_index"],
+            "properties": {
+              "query_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]+$"},
+              "response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "entry_index": {"type": "integer", "minimum": 0}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

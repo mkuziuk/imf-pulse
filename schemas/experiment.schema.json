@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/experiment.schema.json",
+  "title": "IMF Pulse experiment",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "created_at",
+    "updated_at",
+    "title",
+    "observation_model",
+    "contamination_model",
+    "signal_configuration",
+    "window_sequence",
+    "robustness_parameter",
+    "metrics",
+    "seeds",
+    "trial_count",
+    "reference_target",
+    "outputs",
+    "evidence"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "created_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "updated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "title": {"type": "string", "minLength": 1},
+    "observation_model": {"type": "string", "minLength": 1},
+    "contamination_model": {"type": "string", "minLength": 1},
+    "signal_configuration": {"type": "string", "minLength": 1},
+    "window_sequence": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "robustness_parameter": {"type": "string", "minLength": 1},
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "seeds": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {"type": "string", "minLength": 1},
+          {"type": "integer"}
+        ]
+      }
+    },
+    "trial_count": {"type": "integer", "minimum": 1},
+    "reference_target": {
+      "type": "object",
+      "required": ["kind", "description"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "clean_same_contrast",
+            "population",
+            "expected_noisy_loss",
+            "latent_signal",
+            "latent_components",
+            "clean_signal",
+            "observed_signal",
+            "other"
+          ]
+        },
+        "description": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "outputs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "evidence.schema.json#/$defs/evidenceReference"}
+    },
+    "topics": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "notes": {"type": "string"}
+  },
+  "additionalProperties": false
+}

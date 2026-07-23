@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/release.schema.json",
+  "title": "IMF Pulse immutable release manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "release_id",
+    "created_at",
+    "status",
+    "snapshot_id",
+    "config_sha256",
+    "input_fingerprint",
+    "semantic_fingerprint",
+    "runtime",
+    "files",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "created_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "status": {"type": "string", "enum": ["candidate", "published"]},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "config_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "input_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+    "semantic_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+    "accepted_publications_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "runtime": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "publication": {
+      "type": "object",
+      "required": ["pulse", "artifact_manifests", "binding_sha256"],
+      "properties": {
+        "pulse": {
+          "type": "object",
+          "required": ["id", "source_path", "bound_path", "sha256"],
+          "properties": {
+            "id": {"$ref": "common.schema.json#/$defs/identifier"},
+            "source_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+            "bound_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+            "sha256": {"$ref": "common.schema.json#/$defs/sha256"}
+          },
+          "additionalProperties": false
+        },
+        "artifact_manifests": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["artifact_id", "manifest_url", "source_path", "bound_path", "sha256", "files", "rights"],
+            "properties": {
+              "artifact_id": {"$ref": "common.schema.json#/$defs/identifier"},
+              "manifest_url": {"$ref": "common.schema.json#/$defs/publicUrlPath"},
+              "source_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+              "bound_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+              "sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+              "rights": {"type": "object", "additionalProperties": true},
+              "generator": {
+                "type": "object",
+                "required": ["source_path", "bound_path", "sha256", "bytes"],
+                "properties": {
+                  "source_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+                  "bound_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+                  "sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+                  "bytes": {"type": "integer", "minimum": 0}
+                },
+                "additionalProperties": false
+              },
+              "files": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["url", "source_path", "bound_path", "sha256", "bytes"],
+                  "properties": {
+                    "url": {"$ref": "common.schema.json#/$defs/publicUrlPath"},
+                    "source_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+                    "bound_path": {"$ref": "common.schema.json#/$defs/relativePath"},
+                    "sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+                    "bytes": {"type": "integer", "minimum": 0}
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "binding_sha256": {"$ref": "common.schema.json#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "previous_release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "run_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "files": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"$ref": "common.schema.json#/$defs/relativePath"},
+      "additionalProperties": {"$ref": "common.schema.json#/$defs/sha256"}
+    },
+    "warnings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "gates": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/gateResult"}
+    },
+    "latest_pulse_id": {"$ref": "common.schema.json#/$defs/identifier"}
+  },
+  "dependentRequired": {
+    "publication": ["accepted_publications_sha256"]
+  },
+  "additionalProperties": false
+}

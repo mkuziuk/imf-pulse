@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/evidence.schema.json",
+  "title": "IMF Pulse evidence reference",
+  "$defs": {
+    "structuredLocator": {
+      "type": "object",
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "text_lines",
+            "file_lines",
+            "pdf",
+            "csv_rows",
+            "table",
+            "json_pointer",
+            "notebook_cell",
+            "notebook_output"
+          ]
+        },
+        "path": {"$ref": "common.schema.json#/$defs/relativePath"},
+        "section": {"type": "string", "minLength": 1},
+        "page": {"type": "integer", "minimum": 1},
+        "equation": {"type": "string", "minLength": 1},
+        "theorem": {"type": "string", "minLength": 1},
+        "line_start": {"type": "integer", "minimum": 1},
+        "line_end": {"type": "integer", "minimum": 1},
+        "cell_id": {"type": "string", "minLength": 1},
+        "cell_index": {"type": "integer", "minimum": 0},
+        "output_index": {"type": "integer", "minimum": 0},
+        "mime": {"type": "string", "minLength": 1},
+        "json_pointer": {"type": "string", "pattern": "^(?:/.*)?$"},
+        "pointer": {"type": "string", "pattern": "^(?:/.*)?$"},
+        "csv_row": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "header_row": {"type": "integer", "minimum": 1},
+        "row_start": {"type": "integer", "minimum": 1},
+        "row_end": {"type": "integer", "minimum": 1},
+        "column": {"type": "string", "minLength": 1},
+        "anchor": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"enum": ["text_lines", "file_lines"]}}},
+          "then": {"required": ["line_start", "line_end"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "pdf"}}},
+          "then": {"required": ["page"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "csv_rows"}}},
+          "then": {"required": ["csv_row"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "table"}}},
+          "then": {"required": ["row_start", "row_end"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "json_pointer"}}},
+          "then": {
+            "anyOf": [
+              {"required": ["json_pointer"]},
+              {"required": ["pointer"]}
+            ]
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"enum": ["notebook_cell", "notebook_output"]}}},
+          "then": {
+            "anyOf": [
+              {"required": ["cell_id"]},
+              {"required": ["cell_index"]}
+            ]
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "notebook_output"}}},
+          "then": {"required": ["output_index", "mime"]}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "evidenceReference": {
+      "type": "object",
+      "required": ["source_id", "source_sha256", "role", "locator"],
+      "properties": {
+        "source_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "source_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+        "role": {
+          "type": "string",
+          "enum": ["direct", "supporting", "contradicting", "contextual", "quotation", "implementation", "data"]
+        },
+        "locator": {
+          "oneOf": [
+            {"$ref": "#/$defs/structuredLocator"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "excerpt_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+        "note": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/evidenceReference"
+}

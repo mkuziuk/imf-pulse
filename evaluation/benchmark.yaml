@@ -1,0 +1,246 @@
+schema_version: "1.0.0"
+id: imf-pulse-gold-v1
+title: IMF Pulse initial benchmark
+reviewed_on: 2026-07-22
+status: curated
+questions:
+  - id: benchmark-01-imf-vs-irmf
+    question: What distinguishes IMF and IRMF in this project?
+    answer: >-
+      Both use the same sequential multiscale recursion: fit a local component to the current residual, record it, subtract it, and then move to a smaller window. In repository usage, linear IMF uses quadratic loss and therefore a normalized kernel-weighted mean with fixed W operators. The robust variant associated with the gd-irmf/IRMF naming uses the smooth rho_H loss with bounded erf score and solves a nonlinear local location problem by gradient descent. Fixed-matrix commutativity and exact operator-energy calculations therefore apply to the linear method, not directly to robust IRMF. The repository does not give a single explicit expansion of the acronym IRMF, so the methodological distinction is firmer than the nomenclature.
+    knowledge_ids:
+      - claim-imf-irmf-local-estimator-distinction
+      - method-linear-recursive-imf
+      - method-robust-recursive-irmf
+    evidence:
+      - source_id: src-repo-readme
+        locator: README.md, lines 44–118 and 152–159
+      - source_id: src-robust-gd-note
+        locator: experiments/robust-gradient-descent/ROBUST_GRADIENT_DESCENT.md, lines 404–426
+      - source_id: src-tex-gd-irmf-review
+        locator: overleaf/gd_irmf_review.tex, lines 19–58 and 105–164
+    confidence:
+      level: high
+      score: 0.94
+      rationale: The estimator and recursion are explicit; only the acronym's formal expansion is ambiguous.
+    gaps:
+      - No reviewed source provides a normative one-sentence IMF-versus-IRMF definition.
+
+  - id: benchmark-02-linear-only-claims
+    question: Which claims apply only to linear filtering?
+    answer: >-
+      IMF.pdf enters a section explicitly devoted to local linear smoothing after fixing quadratic loss. The fixed matrices W_k, residual operators A_k, composite operators calligraphic W_k, linear component/error identities, covariance propagation, operator norms, and regular-wrap commutativity are linear-only. The exact Fourier multipliers, impulse-response energies, DC-gain calculation, and exact energy calibration in the diagnostics are also linear-only. The sequential residual recursion and the idea of a local contrast are not linear-only. Robust recursion is data-dependent and nonlinear, so it needs bootstrap, Jacobian, or sandwich approximations rather than direct reuse of the fixed-operator formulas.
+    knowledge_ids:
+      - claim-fixed-operator-results-linear-only
+      - method-linear-operator-energy-scaling
+      - method-robust-bootstrap-energy-scaling
+    evidence:
+      - source_id: src-imf-draft
+        locator: IMF.pdf, p. 4 §2.5 through p. 7 §2.5.4, equations (2.1)–(2.4), Lemmas 2.1–2.6
+      - source_id: src-robust-gd-note
+        locator: experiments/robust-gradient-descent/ROBUST_GRADIENT_DESCENT.md, lines 404–426
+      - source_id: src-tex-error-scaling-energy
+        locator: overleaf/gd_imf_error_scaling_comparison_with_energy_explanation.tex, lines 217–287
+    confidence:
+      level: high
+      score: 0.98
+      rationale: The scope boundary is explicit in the draft and implementation note.
+    gaps:
+      - Linear-only scope does not make the draft's unproved statements valid theorems.
+
+  - id: benchmark-03-lemma-2-5
+    question: What does Lemma 2.5 establish, and what does it not establish?
+    answer: >-
+      As rendered, page 5 separately defines ordinary W^(k) and calligraphic composite 𝒲^(k)=W^(k)A^(k−1). Page 6 prints Lemma 2.5 with ordinary W, asserting only (W^(k)W^(k)ᵀ)_tt asymptotic-order (n h_k)^−1. With the extra white-noise assumption Var(epsilon)=sigma²I, this gives the pointwise variance order for the single-pass error W_k epsilon. It does not establish a rate for the composite recursive error 𝒲_k epsilon, robust recursion, equality or a common stage constant, realized RMSE, global L2 or sup error, finite-sample equality, or uniformity in t, k, or h. It has no proof. The internal theory audit, review, executive summary, and TeX scaling report instead transcribe the lemma with calligraphic 𝒲; that secondary reading contradicts the visible primary PDF. A missing-calligraphic-glyph typo is possible authorial intent, but cannot be assumed.
+    knowledge_ids:
+      - claim-lemma-2-5-plain-w
+      - claim-secondary-lemma-composite-reading
+      - relationship-secondary-composite-reading-contradicts-pdf
+    evidence:
+      - source_id: src-imf-draft
+        locator: IMF.pdf, p. 5 §2.5.1 equations (2.1)–(2.2), and p. 6 §2.5.3 Lemma 2.5
+      - source_id: src-theory-audit
+        locator: research/first-imf-recursive-error/agents/theory.md, lines 5–19
+      - source_id: src-recursive-review
+        locator: research/first-imf-recursive-error/review.md, lines 14–20
+      - source_id: src-tex-error-scaling-energy
+        locator: overleaf/gd_imf_error_scaling_comparison_with_energy_explanation.tex, lines 109–128
+    confidence:
+      level: high
+      score: 0.995
+      rationale: Very high confidence in the visually reviewed rendered glyphs and literal statement; the PDF text extractor flattens both glyphs, so machine text alone is insufficient. Confidence remains low in unstated authorial intent or mathematical validity.
+    gaps:
+      - The author must clarify whether plain W is intended and supply a proof with assumptions and uniformity conditions.
+
+  - id: benchmark-04-first-recursive-error
+    question: Why is the first recursive IMF error larger?
+    answer: >-
+      For the implemented linear filter, stage 1 transmits noise through W_1 with no previous residual factors. Every later stage transmits it through W_k times the product of all preceding (I−W_j) factors. Stage 1 is a low-pass/scaling output with DC gain one; later stages remove DC and behave as lower-energy band-pass details. Bandwidth scaling removes the leading h_k^−1/2 change but not this stage-specific operator energy. The exact finite-n profile gives scaled recursive RMS 0.0201816 at stage 1 versus a stages-2–9 mean of 0.0067761, ratio 2.978. Five thousand Gaussian trials reproduce the pattern, and reflect boundaries amplify but do not create it. For robust filtering, Gaussian-only and contaminated Monte Carlo show the same qualitative pattern, but no exact fixed-operator theorem applies. “Larger” here concerns the bandwidth-scaled stage-one/tail contrast; the first raw RMS is not the largest of all nine stages.
+    knowledge_ids:
+      - claim-first-recursive-error-operator-energy
+      - relationship-exact-linear-supports-first-error
+      - relationship-linear-mc-reproduces-operator-profile
+    evidence:
+      - source_id: src-linear-operator-exact
+        locator: research/first-imf-recursive-error/diagnostics/linear_operator_exact.csv, rows 2–10
+      - source_id: src-diagnostics-summary
+        locator: research/first-imf-recursive-error/diagnostics/summary.json, /linear_exact
+      - source_id: src-linear-monte-carlo
+        locator: research/first-imf-recursive-error/diagnostics/linear_monte_carlo.csv, rows 2–19
+      - source_id: src-boundary-monte-carlo
+        locator: research/first-imf-recursive-error/diagnostics/recursive_boundary_monte_carlo.csv, rows 2–19
+    confidence:
+      level: high
+      score: 0.99
+      rationale: Exact discrete algebra, stored-output reproduction, Monte Carlo, and boundary ablation agree.
+    gaps:
+      - Constants are specific to the current kernel, windows, n, covariance, and boundary.
+      - The robust explanation remains empirical and locally linearized rather than proved.
+
+  - id: benchmark-05-single-pass-vs-recursive
+    question: How do single-pass and recursive errors differ?
+    answer: >-
+      Single-pass error d_k applies only the stage-k smoother to the original clean/noisy pair; in the linear case d_k=W_k epsilon. Recursive component error e_k measures the component actually extracted after previous stages changed the residual; linearly, e_1=W_1 epsilon and e_k=W_k(I−W_(k−1))…(I−W_1)epsilon for k>1. They coincide at stage 1. Single-pass bandwidth-scaled RMS is nearly flat in the exact profile, while recursive error has a high first stage and a lower band-pass plateau. For robust filtering, d_k is the difference between two nonlinear one-step fits and cannot be reduced to W_k epsilon.
+    knowledge_ids:
+      - claim-recursive-and-single-pass-errors-differ
+      - method-geometric-bandwidth-scaling
+    evidence:
+      - source_id: src-tex-real-vs-calculated-review
+        locator: overleaf/gd_imf_real_vs_calculated_review.tex, lines 44–78
+      - source_id: src-linear-operator-exact
+        locator: research/first-imf-recursive-error/diagnostics/linear_operator_exact.csv, rows 2–10
+      - source_id: src-nb-real-vs-calculated
+        locator: experiments/real-vs-calculated/gd_imf_real_vs_calculated.ipynb, cell 16 (e1ea4c6c)
+    confidence:
+      level: high
+      score: 0.99
+      rationale: Both estimands are explicitly defined and independently tabulated.
+    gaps: []
+
+  - id: benchmark-06-clean-same-contrast-notebooks
+    question: Which notebooks use a clean same-contrast target rather than the population target?
+    answer: >-
+      Direct clean same-method references occur in imf_irmf_comparison (cells 26–30); robust_gradient_descent_imf (cells 16–17, 22 robust-imf-22, and 25 robust-imf-25); gd_imf_real_vs_calculated (cells 1 a7f99780, 12 b66696e1, and 15–16 e1ea4c6c); its noise-only sibling with the same cell pattern; the energy-scaled notebook (cells 1, 12, 14, and 17–18); both limits notebooks (cell 1 and cell 17 limits-16); and first-imf-recursive-error-diagnostics (cell 4, 9e47cfb3). The observation-model comparison inherits those targets by reusing source notebooks. gd_irmf is different: it compares a cumulative IMF sum with the latent clean signal rather than defining componentwise clean same-contrast errors. No notebook implements the PDF's expected-noisy-loss target through the full robust recursion.
+    knowledge_ids:
+      - claim-clean-same-contrast-target-not-population
+      - relationship-real-vs-calculated-uses-different-target
+    evidence:
+      - source_id: src-nb-imf-irmf-comparison
+        locator: experiments/imf-irmf-comparison/imf_irmf_comparison.ipynb, cells 26–30
+      - source_id: src-nb-robust-gradient
+        locator: experiments/robust-gradient-descent/robust_gradient_descent_imf.ipynb, cells 16–17, 22 (robust-imf-22), 25 (robust-imf-25)
+      - source_id: src-nb-real-vs-calculated
+        locator: experiments/real-vs-calculated/gd_imf_real_vs_calculated.ipynb, cells 1, 12, 15–16
+      - source_id: src-nb-real-vs-calculated-noise-only
+        locator: experiments/real-vs-calculated/gd_imf_real_vs_calculated_noise_only.ipynb, corresponding cells 1, 12, 15–16
+      - source_id: src-nb-energy-scaled
+        locator: experiments/real-vs-calculated/gd_imf_real_vs_calculated_energy_scaled.ipynb, cells 1, 12, 14, 17–18
+      - source_id: src-nb-limits-additive
+        locator: experiments/real-vs-calculated/gd_imf_real_vs_calculated_limits.ipynb, cells 1 and 17 (limits-16)
+      - source_id: src-nb-limits-masked
+        locator: experiments/real-vs-calculated/gd_imf_real_vs_calculated_limits_noise_only.ipynb, cells 1 and 17
+      - source_id: src-nb-recursive-error-diagnostics
+        locator: research/first-imf-recursive-error/first-imf-recursive-error-diagnostics.ipynb, cell 4 (9e47cfb3)
+      - source_id: src-tex-real-vs-calculated-review
+        locator: overleaf/gd_imf_real_vs_calculated_review.tex, lines 29–42 and 273–278
+    confidence:
+      level: high
+      score: 0.96
+      rationale: Static cell inspection and the TeX reference definition agree.
+    gaps:
+      - imf_irmf_comparison lacks stable cell IDs.
+      - The inherited target in the orchestration notebook is not independently defined.
+
+  - id: benchmark-07-robustness-parameter
+    question: How is the robustness parameter selected?
+    answer: >-
+      The tuning prototype evaluates H/sigma in {0.25, 0.5, 1, 2} and scores candidates against the clean decomposition computed with the same H. The stored synthetic run selects H=2 sigma, the largest grid value. Downstream gd_irmf and real-vs-calculated notebooks then fix H=2 sigma—0.4 when sigma=0.2 and 0.8 when sigma=0.4—across all recursive stages. The draft only says H should be of the same order as the pre-contamination noise scale. This is an oracle-style synthetic tuning convention, not a validated deployable, data-driven selector.
+    knowledge_ids:
+      - claim-h-selection-oracle-grid
+      - claim-h-fixed-downstream
+      - relationship-fixed-h-depends-on-oracle-grid
+    evidence:
+      - source_id: src-repo-readme
+        locator: README.md, lines 109–118
+      - source_id: src-robust-gd-note
+        locator: experiments/robust-gradient-descent/ROBUST_GRADIENT_DESCENT.md, lines 133–144
+      - source_id: src-nb-robust-gradient
+        locator: experiments/robust-gradient-descent/robust_gradient_descent_imf.ipynb, cells 22 (robust-imf-22) and 25 (robust-imf-25)
+      - source_id: src-tex-real-vs-calculated-review
+        locator: overleaf/gd_imf_real_vs_calculated_review.tex, lines 119–134 and 352–371
+      - source_id: src-imf-draft
+        locator: IMF.pdf, p. 9 immediately before §3.1
+    confidence:
+      level: high
+      score: 0.96
+      rationale: The implementation rule is explicit; confidence in general optimality is low.
+    gaps:
+      - No held-out selection, uncertainty estimate, stagewise adaptation, or real-data sigma estimator is evaluated.
+
+  - id: benchmark-08-results-without-contamination
+    question: Which results survive without contamination?
+    answer: >-
+      With p=0 but Gaussian noise retained, the large scaled first recursive error survives exactly in the linear operator profile: stage 1 is 0.0201816 versus a stages-2–9 mean of 0.0067761, ratio 2.978. It also survives robustification across 120 Gaussian-only trials: stage 1 averages 0.0188072 versus a later mean of 0.0066272, ratio 2.838. The single-pass-versus-recursive distinction, cumulative importance of prior residual filters, and failure of bandwidth scaling to calibrate sup error also survive. What does not follow is that robust filtering generally outperforms linear filtering on clean Gaussian data or that the result is a universal robust theorem.
+    knowledge_ids:
+      - claim-stage-one-pattern-survives-no-contamination
+      - relationship-robust-mc-supports-no-contamination
+    evidence:
+      - source_id: src-diagnostics-summary
+        locator: research/first-imf-recursive-error/diagnostics/summary.json, /linear_exact and /robust_mc
+      - source_id: src-linear-operator-exact
+        locator: research/first-imf-recursive-error/diagnostics/linear_operator_exact.csv, rows 2–10
+      - source_id: src-robust-monte-carlo
+        locator: research/first-imf-recursive-error/diagnostics/robust_monte_carlo.csv, rows 2–10
+    confidence:
+      level: high
+      score: 0.97
+      rationale: Exact linear and repeated robust Gaussian-only evidence agree for this setup.
+    gaps:
+      - Robust Monte Carlo fixes one signal, n, sigma, H, schedule, and boundary.
+      - No paired repeated linear-versus-robust Gaussian efficiency study is present.
+
+  - id: benchmark-09-incomplete-theory
+    question: Which theoretical statements remain incomplete?
+    answer: >-
+      Lemma 2.5 has no proof, explicit constants, or uniformity conditions. It prints plain W, so its intended relationship to the composite recursive operator is itself unresolved. Lemma 2.4 lacks a proof, omits the sigma² factor in its white-noise specialization, and needs covariance assumptions stronger than equal marginal variances. The draft contains an incorrect component-error/residual-noise equality, unresolved TODOs and section references, an inconsistent epsilon definition, and an incorrect arXiv identifier. Lemmas 3.2–3.3 are unproved. Proposition 4.1 ends with an incomplete bound, and Lemma 4.2(iii) has no right-hand side. Most importantly, no theorem controls the full nonlinear recursive robust composition, the notebook's clean-reference target, or calibrated sup error.
+    knowledge_ids:
+      - claim-theory-draft-incomplete
+      - claim-lemma-2-5-plain-w
+    evidence:
+      - source_id: src-imf-draft
+        locator: IMF.pdf, p. 6 §2.5.3, pp. 8–9 §3, pp. 11–12 §4, and p. 14
+      - source_id: src-theory-audit
+        locator: research/first-imf-recursive-error/agents/theory.md, lines 234–245
+      - source_id: src-recursive-review
+        locator: research/first-imf-recursive-error/review.md, lines 69–90
+    confidence:
+      level: high
+      score: 0.99
+      rationale: The visible omissions are directly checkable; their mathematical repair is unknown.
+    gaps:
+      - A corrected author version could change the status of individual statements.
+
+  - id: benchmark-10-resolving-experiments
+    question: Which experiments could resolve the most important open questions?
+    answer: >-
+      The highest-value next study is a full recursive target-alignment experiment comparing the clean same-contrast robust target with a large-Monte-Carlo expected-noisy-loss target at every stage. Next, compare robust parametric-bootstrap and numerical-Jacobian/sandwich energy scales using at least 200 calibration replicates and held-out seeds. Replace the oracle H rule with a prespecified training/test study of deployable scale estimators over H/sigma. Run a matched factorial study crossing method, n, signal shape, kernel formula, boundary, window schedule, contamination law/probability/scale, and H on identical draws. Calibrate sup error separately with stagewise or simultaneous quantiles. Finally, test the printed single-pass Lemma 2.5 rate and any proposed composite-operator correction separately over increasing n, h, stage, and position; simulation can falsify or delimit an order claim but cannot replace its missing proof.
+    knowledge_ids:
+      - method-robust-bootstrap-energy-scaling
+      - claim-clean-same-contrast-target-not-population
+      - claim-h-selection-oracle-grid
+      - claim-lemma-2-5-plain-w
+    evidence:
+      - source_id: src-recursive-review
+        locator: research/first-imf-recursive-error/review.md, lines 119–127
+      - source_id: src-tex-error-scaling-energy
+        locator: overleaf/gd_imf_error_scaling_comparison_with_energy_explanation.tex, lines 255–287 and 423–477
+      - source_id: src-nb-energy-scaled
+        locator: experiments/real-vs-calculated/gd_imf_real_vs_calculated_energy_scaled.ipynb, cells 14 (7a58f96f) and 20 (b3b926db)
+      - source_id: src-nb-recursive-error-diagnostics
+        locator: research/first-imf-recursive-error/first-imf-recursive-error-diagnostics.ipynb, cells 4 (9e47cfb3) and 7 (672971e5)
+    confidence:
+      level: medium
+      score: 0.88
+      rationale: These experiments directly attack identified estimand, calibration, and generalization gaps, but require prespecified thresholds and precision targets.
+    gaps:
+      - Power, Monte Carlo precision, estimands, and pass/fail thresholds remain to be designed before execution.

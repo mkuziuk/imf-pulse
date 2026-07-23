@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/run.schema.json",
+  "title": "IMF Pulse pipeline run record",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "status",
+    "release_id",
+    "started_at",
+    "completed_at",
+    "pointer_changed"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "status": {
+      "type": "string",
+      "enum": ["ready_to_publish", "unchanged", "processed_no_pulse", "published", "failed"]
+    },
+    "release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "started_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "completed_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "pointer_changed": {"type": "boolean"},
+    "source_mode": {"type": "string", "enum": ["live", "snapshot"]},
+    "base_release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "changed_sources": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "material_change": {"type": "boolean"},
+    "pulse_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "candidate_release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "published_release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "gates": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/gateResult"}
+    },
+    "warnings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "errors": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "error": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"enum": ["ready_to_publish", "unchanged", "failed"]}}},
+      "then": {"properties": {"pointer_changed": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["processed_no_pulse", "published"]}}},
+      "then": {"properties": {"pointer_changed": {"const": true}}}
+    }
+  ],
+  "additionalProperties": false
+}

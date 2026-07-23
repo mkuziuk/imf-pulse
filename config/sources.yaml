@@ -1,0 +1,519 @@
+version: 1
+
+roots:
+  imf:
+    live_path_env: IMF_SOURCE_ROOT
+    default_live_path: ../imf
+    snapshot_root: imports/imf
+    access: read_only
+
+policy:
+  explicit_allowlist_only: true
+  reject_absolute_paths: true
+  reject_parent_segments: true
+  reject_symlinks: true
+  reject_path_escapes: true
+  require_regular_files: true
+  hash_algorithm: sha256
+  execute_source_code: false
+  external_monitoring:
+    enabled: true
+    configuration: config/external-sources.yaml
+  public_reuse_requires_approval: true
+
+sources:
+  - id: src-imf-draft
+    root: imf
+    path: IMF.pdf
+    title: Intrinsic robust multiscale filtering draft
+    authors: [Vladimir Spokoiny]
+    date: "2026-07-03"
+    source_type: internal_theory_draft
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [imf, irmf, signal-decomposition, linear-filtering, robust-local-estimation, theoretical-gaps]
+    extractor: pdf-pages-v1
+    required: true
+    rights: &internal_rights
+      license: unknown
+      reuse_status: internal_only
+      public_distribution: false
+    limitations:
+      - PDF metadata fields are blank; the visible title page supplies the author and date.
+      - This unfinished internal draft contains incomplete and unproved statements and is not ground truth.
+
+  - id: src-repo-readme
+    root: imf
+    path: README.md
+    title: IMF research repository overview
+    authors: []
+    date: null
+    source_type: technical_documentation
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [imf, irmf, signal-decomposition, robust-local-estimation, robustness-parameter]
+    extractor: text-lines-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Repository documentation describes current implementations but is not peer reviewed.
+
+  - id: src-robust-gd-note
+    root: imf
+    path: experiments/robust-gradient-descent/ROBUST_GRADIENT_DESCENT.md
+    title: Robust gradient descent IMF implementation note
+    authors: []
+    date: null
+    source_type: technical_documentation
+    authority_level: implementation_evidence
+    publication_status: unpublished
+    topics: [irmf, robust-local-estimation, robustness-parameter, numerical-experiments]
+    extractor: text-lines-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - The note documents an experimental implementation and does not establish general theory.
+
+  - id: src-nb-imf-irmf-comparison
+    root: imf
+    path: experiments/imf-irmf-comparison/imf_irmf_comparison.ipynb
+    title: IMF and IRMF comparison notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [imf, irmf, signal-decomposition, target-definitions, numerical-experiments]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Results are stored experimental outputs; ingestion must not execute cells.
+      - Some cells lack stable cell IDs.
+
+  - id: src-nb-robust-gradient
+    root: imf
+    path: experiments/robust-gradient-descent/robust_gradient_descent_imf.ipynb
+    title: Robust gradient descent IMF notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [irmf, robust-local-estimation, robustness-parameter, numerical-experiments, target-definitions]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Tuning uses synthetic clean references and should not be read as a deployable selector.
+      - Results are stored outputs; ingestion must not execute cells.
+
+  - id: src-nb-gd-irmf
+    root: imf
+    path: experiments/gd-irmf/gd_irmf.ipynb
+    title: Gradient-descent IRMF notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [irmf, robust-local-estimation, signal-decomposition, numerical-experiments]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Uses a latent-signal comparison rather than the component-wise clean same-method target used elsewhere.
+      - Results are stored outputs; ingestion must not execute cells.
+
+  - id: src-nb-real-vs-calculated
+    root: imf
+    path: experiments/real-vs-calculated/gd_imf_real_vs_calculated.ipynb
+    title: Real versus calculated IMF error notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [imf, irmf, recursive-error, error-scaling, target-definitions, numerical-experiments]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Uses a clean same-method contrast rather than a population or latent-component target.
+      - Results are stored outputs; ingestion must not execute cells.
+
+  - id: src-nb-real-vs-calculated-noise-only
+    root: imf
+    path: experiments/real-vs-calculated/gd_imf_real_vs_calculated_noise_only.ipynb
+    title: Real versus calculated IMF error, Gaussian-noise-only notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [imf, irmf, recursive-error, contamination-models, target-definitions, numerical-experiments]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Uses a clean same-method contrast and a narrow synthetic configuration.
+      - Results are stored outputs; ingestion must not execute cells.
+
+  - id: src-nb-energy-scaled
+    root: imf
+    path: experiments/real-vs-calculated/gd_imf_real_vs_calculated_energy_scaled.ipynb
+    title: Energy-scaled IMF error notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [imf, irmf, recursive-error, error-scaling, uncertainty-calibration, numerical-experiments]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Stored calibration results are configuration-specific and do not prove a general rate.
+      - Results are stored outputs; ingestion must not execute cells.
+
+  - id: src-nb-limits-additive
+    root: imf
+    path: experiments/real-vs-calculated/gd_imf_real_vs_calculated_limits.ipynb
+    title: Additive-contamination limit study notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [irmf, contamination-models, robustness-parameter, recursive-error, numerical-experiments]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Covers a finite synthetic parameter grid and does not identify universal robustness limits.
+      - Results are stored outputs; ingestion must not execute cells or filesystem-writing code.
+
+  - id: src-nb-limits-masked
+    root: imf
+    path: experiments/real-vs-calculated/gd_imf_real_vs_calculated_limits_noise_only.ipynb
+    title: Masked-contamination limit study notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [irmf, contamination-models, robustness-parameter, recursive-error, numerical-experiments]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Covers a finite synthetic parameter grid and a particular masked observation model.
+      - Results are stored outputs; ingestion must not execute cells or filesystem-writing code.
+
+  - id: src-nb-observation-model-comparison
+    root: imf
+    path: experiments/real-vs-calculated/gd_imf_observation_model_comparison.ipynb
+    title: Observation-model comparison notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [irmf, contamination-models, target-definitions, numerical-experiments]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - The notebook reuses and executes cells from other notebooks; ingestion must only parse stored content.
+      - It inherits reference targets from the source notebooks rather than defining an independent target.
+
+  - id: src-nb-recursive-error-diagnostics
+    root: imf
+    path: research/first-imf-recursive-error/first-imf-recursive-error-diagnostics.ipynb
+    title: First recursive IMF error diagnostics notebook
+    authors: []
+    date: null
+    source_type: local_notebook
+    authority_level: internal_reviewed
+    publication_status: unpublished
+    topics: [imf, irmf, recursive-error, error-scaling, target-definitions, numerical-experiments, theoretical-gaps]
+    extractor: notebook-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - The notebook can execute selected cells from another notebook; ingestion must only parse stored content.
+      - Diagnostic conclusions remain conditional on the studied configuration and reference target.
+
+  - id: src-recursive-executive-summary
+    root: imf
+    path: research/first-imf-recursive-error/executive-summary.md
+    title: First recursive IMF error executive summary
+    authors: []
+    date: null
+    source_type: secondary_commentary
+    authority_level: internal_reviewed
+    publication_status: unpublished
+    topics: [recursive-error, error-scaling, boundary-behavior, theoretical-gaps]
+    extractor: text-lines-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - This synthesis is secondary to the draft, code, and structured numerical outputs.
+
+  - id: src-recursive-review
+    root: imf
+    path: research/first-imf-recursive-error/review.md
+    title: First recursive IMF error review
+    authors: []
+    date: null
+    source_type: secondary_commentary
+    authority_level: internal_reviewed
+    publication_status: unpublished
+    topics: [recursive-error, error-scaling, target-definitions, theoretical-gaps]
+    extractor: text-lines-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Interpretive audit statements must be checked against the cited primary artifact and exact glyphs.
+
+  - id: src-theory-audit
+    root: imf
+    path: research/first-imf-recursive-error/agents/theory.md
+    title: First recursive error theory audit
+    authors: []
+    date: null
+    source_type: secondary_commentary
+    authority_level: internal_reviewed
+    publication_status: unpublished
+    topics: [linear-filtering, recursive-error, target-definitions, theoretical-gaps]
+    extractor: text-lines-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - This audit contains interpretation and may mis-transcribe notation from the internal PDF.
+
+  - id: src-code-path-audit
+    root: imf
+    path: research/first-imf-recursive-error/agents/code-path.md
+    title: First recursive error code-path audit
+    authors: []
+    date: null
+    source_type: secondary_commentary
+    authority_level: internal_reviewed
+    publication_status: unpublished
+    topics: [imf, irmf, recursive-error, target-definitions, numerical-experiments]
+    extractor: text-lines-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - The audit is a secondary reading of implementations and does not replace the cited code or notebook cell.
+
+  - id: src-numerical-audit
+    root: imf
+    path: research/first-imf-recursive-error/agents/numerical-diagnosis.md
+    title: First recursive error numerical audit
+    authors: []
+    date: null
+    source_type: secondary_commentary
+    authority_level: internal_reviewed
+    publication_status: unpublished
+    topics: [recursive-error, error-scaling, boundary-behavior, contamination-models, numerical-experiments]
+    extractor: text-lines-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - This synthesis is secondary to the structured result tables and generator implementation.
+
+  - id: src-diagnostics-summary
+    root: imf
+    path: research/first-imf-recursive-error/diagnostics/summary.json
+    title: First recursive error diagnostics summary
+    authors: []
+    date: null
+    source_type: numerical_experiment
+    authority_level: derived_reproducible
+    publication_status: unpublished
+    topics: [recursive-error, error-scaling, boundary-behavior, contamination-models, numerical-experiments]
+    extractor: json-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Aggregate values are derived by the registered diagnostic generator and remain configuration-specific.
+
+  - id: src-linear-operator-exact
+    root: imf
+    path: research/first-imf-recursive-error/diagnostics/linear_operator_exact.csv
+    title: Exact linear recursive-operator diagnostics
+    authors: []
+    date: null
+    source_type: numerical_experiment
+    authority_level: derived_reproducible
+    publication_status: unpublished
+    topics: [linear-filtering, recursive-error, error-scaling, numerical-experiments]
+    extractor: csv-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Exactness is conditional on the implemented discrete periodic operator and configured kernel/window sequence.
+
+  - id: src-linear-monte-carlo
+    root: imf
+    path: research/first-imf-recursive-error/diagnostics/linear_monte_carlo.csv
+    title: Linear recursive-error Monte Carlo results
+    authors: []
+    date: null
+    source_type: numerical_experiment
+    authority_level: derived_reproducible
+    publication_status: unpublished
+    topics: [linear-filtering, recursive-error, error-scaling, numerical-experiments]
+    extractor: csv-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Monte Carlo results apply to the recorded seeds, trial count, signal, and noise configuration.
+
+  - id: src-robust-monte-carlo
+    root: imf
+    path: research/first-imf-recursive-error/diagnostics/robust_monte_carlo.csv
+    title: Robust recursive-error Monte Carlo results
+    authors: []
+    date: null
+    source_type: numerical_experiment
+    authority_level: derived_reproducible
+    publication_status: unpublished
+    topics: [irmf, robust-local-estimation, recursive-error, contamination-models, numerical-experiments]
+    extractor: csv-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Results use a fixed robustness parameter and a limited paired Monte Carlo design.
+
+  - id: src-boundary-exact
+    root: imf
+    path: research/first-imf-recursive-error/diagnostics/single_pass_boundary_exact.csv
+    title: Exact single-pass boundary diagnostics
+    authors: []
+    date: null
+    source_type: numerical_experiment
+    authority_level: derived_reproducible
+    publication_status: unpublished
+    topics: [linear-filtering, boundary-behavior, error-scaling, numerical-experiments]
+    extractor: csv-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Exact calculations cover single-pass filters for the implemented periodic and reflected boundaries.
+
+  - id: src-boundary-monte-carlo
+    root: imf
+    path: research/first-imf-recursive-error/diagnostics/recursive_boundary_monte_carlo.csv
+    title: Recursive boundary Monte Carlo results
+    authors: []
+    date: null
+    source_type: numerical_experiment
+    authority_level: derived_reproducible
+    publication_status: unpublished
+    topics: [linear-filtering, recursive-error, boundary-behavior, numerical-experiments]
+    extractor: csv-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Recursive boundary comparisons are Monte Carlo rather than exact finite-domain operator calculations.
+
+  - id: src-seed777-controls
+    root: imf
+    path: research/first-imf-recursive-error/diagnostics/seed777_method_controls.csv
+    title: Seed-777 method and contamination controls
+    authors: []
+    date: null
+    source_type: numerical_experiment
+    authority_level: derived_reproducible
+    publication_status: unpublished
+    topics: [imf, irmf, recursive-error, contamination-models, numerical-experiments]
+    extractor: csv-static-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - These paired controls use one realized seed and do not establish population performance.
+
+  - id: src-tex-gd-irmf-review
+    root: imf
+    path: overleaf/gd_irmf_review.tex
+    title: Gradient-descent IRMF review manuscript
+    authors: []
+    date: null
+    source_type: tex_manuscript
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [irmf, robust-local-estimation, signal-decomposition, numerical-experiments]
+    extractor: tex-uncompiled-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Internal manuscript claims have not been peer reviewed; ingestion must not compile TeX.
+
+  - id: src-tex-real-vs-calculated-review
+    root: imf
+    path: overleaf/gd_imf_real_vs_calculated_review.tex
+    title: Real versus calculated IMF error review manuscript
+    authors: []
+    date: null
+    source_type: tex_manuscript
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [imf, irmf, recursive-error, target-definitions, numerical-experiments]
+    extractor: tex-uncompiled-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Internal manuscript claims and comparisons are configuration-specific; ingestion must not compile TeX.
+
+  - id: src-tex-error-scaling
+    root: imf
+    path: overleaf/gd_imf_error_scaling_comparison.tex
+    title: IMF error-scaling comparison manuscript
+    authors: []
+    date: null
+    source_type: tex_manuscript
+    authority_level: internal_unverified
+    publication_status: unpublished
+    topics: [imf, irmf, recursive-error, error-scaling, uncertainty-calibration]
+    extractor: tex-uncompiled-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - Internal manuscript claims have not been peer reviewed; ingestion must not compile TeX.
+
+  - id: src-tex-error-scaling-energy
+    root: imf
+    path: overleaf/gd_imf_error_scaling_comparison_with_energy_explanation.tex
+    title: IMF error-scaling manuscript with operator-energy explanation
+    authors: []
+    date: null
+    source_type: tex_manuscript
+    authority_level: internal_unverified
+    publication_status: working_draft
+    topics: [linear-filtering, recursive-error, error-scaling, theoretical-gaps]
+    extractor: tex-uncompiled-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - This file is an untracked internal working draft and must not silently supersede the tracked manuscript.
+      - Ingestion must not compile TeX.
+
+  - id: src-diagnostic-generator
+    root: imf
+    path: research/first-imf-recursive-error/diagnostics/run_numerical_diagnosis.py
+    title: First recursive error diagnostic generator
+    authors: []
+    date: null
+    source_type: implementation
+    authority_level: implementation_evidence
+    publication_status: unpublished
+    topics: [imf, irmf, recursive-error, boundary-behavior, contamination-models, numerical-experiments]
+    extractor: python-ast-v1
+    required: true
+    rights: *internal_rights
+    limitations:
+      - The generator duplicates notebook definitions and may drift from them.
+      - It must be parsed statically and never imported or executed during ingestion.

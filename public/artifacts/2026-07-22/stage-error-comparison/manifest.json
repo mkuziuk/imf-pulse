@@ -1,0 +1,145 @@
+{
+  "artifact_date": "2026-07-22",
+  "artifact_id": "imf-stage-error-comparison-2026-07-22",
+  "artifact_type": "scientific_chart",
+  "caption": "The initial low-pass component retains DC and has a much larger scaled recursive error than later zero-DC detail components; the single-pass control remains nearly flat.",
+  "evidence": [
+    {
+      "confidence": "high within stated assumptions",
+      "source_id": "src-linear-operator-exact",
+      "source_locator": "linear_operator_exact.csv file lines 2-10; field=single_scaled_by_a_k_over_2",
+      "statement": "Exact single-pass scaled RMS has coefficient of variation 0.654% across stages 1-9.",
+      "status": "calculated_exact_under_assumptions"
+    },
+    {
+      "confidence": "high within stated assumptions",
+      "source_id": "src-linear-operator-exact",
+      "source_locator": "linear_operator_exact.csv file lines 2-10; field=recursive_scaled_by_a_k_over_2",
+      "statement": "Exact recursive stage-1 scaled RMS is 2.978 times the stages 2-9 mean.",
+      "status": "calculated_exact_under_assumptions"
+    },
+    {
+      "confidence": "single-run observation only",
+      "source_id": "src-seed777-controls",
+      "source_locator": "seed777_method_controls.csv file lines 2-10; case=linear_gaussian_only_notebook; field=recursive_scaled_rmse_a_k_over_2",
+      "statement": "The stored seed-777 linear Gaussian realization follows the same first-stage-versus-tail shape.",
+      "status": "observed_single_realization"
+    }
+  ],
+  "files": [
+    {
+      "bytes": 7847,
+      "media_type": "text/csv",
+      "role": "normalized underlying data",
+      "sha256": "953193e7d8318c2332993cd37bf7cef23867af5a68d459570c66769e8f947000",
+      "url": "/artifacts/2026-07-22/stage-error-comparison/stage-error-comparison.csv"
+    },
+    {
+      "bytes": 3005,
+      "media_type": "application/json",
+      "role": "declarative chart specification",
+      "sha256": "6a9fa2b3768bc0f829f4d97afda42d551a7e56f0ab1d30afaa74ae348625273c",
+      "url": "/artifacts/2026-07-22/stage-error-comparison/stage-error-comparison.spec.json"
+    },
+    {
+      "bytes": 9896,
+      "media_type": "image/svg+xml",
+      "role": "responsive accessible rendered chart",
+      "sha256": "c182d88547c09da8143104a697172aada7d3aeb59678c0d918f5722cd049ca1d",
+      "url": "/artifacts/2026-07-22/stage-error-comparison/stage-error-comparison.svg"
+    }
+  ],
+  "generator": {
+    "clock_dependent_fields": [],
+    "deterministic": true,
+    "language": "Python standard library",
+    "path": "scripts/generate_stage_error_artifact.py",
+    "sha256": "61ded6c534b892181e8390a49bf8394bad933804bf235d9e5fbb3725bf3d52e9",
+    "source_files_executed": false,
+    "version": "1.0.0"
+  },
+  "limitations": [
+    "Exact curves are finite-n calculations for iid homoscedastic noise, sigma=0.4, n=1000, periodic wrap boundaries, the recorded kernel, and the fixed nine-window schedule.",
+    "The seed-777 curve is one realized Gaussian sample, not an uncertainty interval or population estimate.",
+    "The plotted a^(k/2) divisor is a geometric rate normalization, not exact stage-specific operator standardization.",
+    "The chart does not establish a robust-recursion theorem and does not address supremum-error normalization.",
+    "Different observation models, targets, boundaries, covariance structures, or schedules may produce different constants.",
+    "This project-generated chart is approved for local display; public deployment requires explicit owner approval."
+  ],
+  "manifest_url": "/artifacts/2026-07-22/stage-error-comparison/manifest.json",
+  "parameters": {
+    "a": "sqrt(2)",
+    "boundary": "wrap (periodic)",
+    "metric": "RMS / a^(k/2)",
+    "n": 1000,
+    "seed_for_realized_trace": 777,
+    "sigma": 0.4,
+    "window_sizes": [
+      501,
+      355,
+      251,
+      177,
+      125,
+      89,
+      63,
+      45,
+      31
+    ]
+  },
+  "rights": {
+    "local_display_allowed": true,
+    "may_publish_publicly": false,
+    "public_deployment_requires_owner_approval": true,
+    "status": "project_generated_scientific_chart"
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "content_sha256": "63e0b68261063e2ec74040111f4ddd4dcd5e614f6b30847bf2fae687f4aa82eb",
+      "execution_status": "read as CSV only",
+      "locators": [
+        "header: file line 1",
+        "stages 1-9: file lines 2-10",
+        "fields: stage, window_size, single_scaled_by_a_k_over_2, recursive_scaled_by_a_k_over_2, component_dc_gain, recursive_variance_fraction_of_single"
+      ],
+      "relative_path": "research/first-imf-recursive-error/diagnostics/linear_operator_exact.csv",
+      "rights_status": "internal project source; use governed by project owner",
+      "role": "exact finite-n linear operator results",
+      "source_id": "src-linear-operator-exact",
+      "source_root_alias": "imf"
+    },
+    {
+      "content_sha256": "607409a5f3deae6704eb909064ac7cde2bfe35963491cc53a4d8d1a4295b172c",
+      "execution_status": "read as CSV only",
+      "locators": [
+        "header: file line 1",
+        "case=linear_gaussian_only_notebook, stages 1-9: file lines 2-10",
+        "field: recursive_scaled_rmse_a_k_over_2"
+      ],
+      "relative_path": "research/first-imf-recursive-error/diagnostics/seed777_method_controls.csv",
+      "rights_status": "internal project source; use governed by project owner",
+      "role": "stored seed-777 method-control results",
+      "source_id": "src-seed777-controls",
+      "source_root_alias": "imf"
+    },
+    {
+      "content_sha256": "9f980f36d86dcab4d4a01947dd601d3962d8493066d21fc096bba00d91a2516d",
+      "execution_status": "not executed; bytes hashed only",
+      "locators": [
+        "parameters: lines 23-31",
+        "kernel weights: lines 77-87",
+        "linear recursion: lines 99-106",
+        "exact operator calculation: lines 124-179",
+        "seed-777 controls: lines 330-398"
+      ],
+      "relative_path": "research/first-imf-recursive-error/diagnostics/run_numerical_diagnosis.py",
+      "rights_status": "internal project source; use governed by project owner",
+      "role": "parameter and generation provenance",
+      "source_id": "src-diagnostic-generator",
+      "source_root_alias": "imf"
+    }
+  ],
+  "spec_url": "/artifacts/2026-07-22/stage-error-comparison/stage-error-comparison.spec.json",
+  "stable_url": "/artifacts/2026-07-22/stage-error-comparison/stage-error-comparison.svg",
+  "title": "The first stage is not the same filter"
+}

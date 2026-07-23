@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/pulse.schema.json",
+  "title": "The Residual pulse front matter",
+  "description": "Validates front matter only. Markdown structure, word count, citations, links, and assets are separate validation gates.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "date",
+    "title",
+    "lead",
+    "status",
+    "topics",
+    "featured_artifact",
+    "artifact_manifests",
+    "source_ids"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "date": {"$ref": "common.schema.json#/$defs/calendarDate"},
+    "slug": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "title": {"type": "string", "minLength": 1},
+    "lead": {"type": "string", "minLength": 1},
+    "status": {"type": "string", "enum": ["draft", "published"]},
+    "topics": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "featured_artifact": {"$ref": "common.schema.json#/$defs/identifier"},
+    "artifact_manifests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/publicUrlPath"}
+    },
+    "source_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "knowledge_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "common.schema.json#/$defs/identifier"}
+    },
+    "word_count": {"type": "integer", "minimum": 350, "maximum": 650}
+  },
+  "additionalProperties": false
+}

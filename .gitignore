@@ -1,0 +1,40 @@
+node_modules/
+dist/
+coverage/
+.vite/
+
+.venv/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+.pipeline-staging/
+.pipeline-lock
+tmp/
+
+# Private, reproducible local snapshots of the sibling IMF repository.
+# Manifests and public-safe derived releases live under data/ instead.
+imports/imf/snapshots/
+imports/imf/current.json
+
+# Private release transactions and built-site copies. Public deployments use
+# only the separately audited, hash-bound public-release/ export.
+data/releases/
+data/runs/
+data/site-builds/
+data/current.json
+data/.staging/
+data/.site-staging/
+data/.daily-staging/
+data/daily-staging/
+data/.daily-pipeline.lock
+data/external/
+data/review/
+.public-release-staging-*/
+
+.DS_Store

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/external-batch.schema.json",
+  "title": "Immutable external metadata search batch",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "batch_sha256",
+    "as_of",
+    "status",
+    "metadata_only",
+    "queries",
+    "candidates",
+    "already_seen_count"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "id": {"type": "string", "pattern": "^external-batch-[0-9a-f]{20}$"},
+    "batch_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "as_of": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["candidates_pending_review", "no_candidates"]},
+    "metadata_only": {"const": true},
+    "queries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "request_url",
+          "response_sha256",
+          "response_size_bytes",
+          "matched_count",
+          "batch_candidate_count"
+        ],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]+$"},
+          "provider": {"const": "arxiv"},
+          "request_url": {"type": "string", "pattern": "^https://export\\.arxiv\\.org/api/query\\?"},
+          "response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "response_size_bytes": {"type": "integer", "minimum": 1},
+          "matched_count": {"type": "integer", "minimum": 0},
+          "batch_candidate_count": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {"$ref": "external-candidate.schema.json"}
+    },
+    "already_seen_count": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}

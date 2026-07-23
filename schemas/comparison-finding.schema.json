@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/comparison-finding.schema.json",
+  "title": "Deterministic comparison finding requiring review",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "finding_sha256",
+    "kind",
+    "existing_id",
+    "candidate_id",
+    "concept_key",
+    "qualification",
+    "comparison",
+    "review_required"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "id": {"type": "string", "pattern": "^comparison-finding-[0-9a-f]{20}$"},
+    "finding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "kind": {
+      "enum": ["contradicts", "uses-different-target", "uses-different-definition", "review-gap"]
+    },
+    "existing_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "candidate_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "concept_key": {"type": "string", "minLength": 1, "maxLength": 300},
+    "qualification": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "comparison": {
+      "type": "object",
+      "properties": {
+        "existing_target": {"type": ["string", "null"]},
+        "candidate_target": {"type": ["string", "null"]},
+        "existing_scopes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "candidate_scopes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "existing_value": {"type": ["string", "null"]},
+        "candidate_value": {"type": ["string", "null"]},
+        "term_key": {"type": "string", "minLength": 1},
+        "reason": {
+          "enum": ["missing_scope", "scope_mismatch", "missing_target", "missing_value"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "review_required": {"const": true}
+  },
+  "additionalProperties": false
+}

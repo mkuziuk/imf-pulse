@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/daily-run-result.schema.json",
+  "title": "The Residual daily pipeline result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "date",
+    "run_id",
+    "release_id",
+    "pulse_path",
+    "artifact_urls",
+    "release_advanced",
+    "checkpoint_refreshed",
+    "reason",
+    "evidence_ids",
+    "pending_review_count",
+    "pending_review_path"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "status": {
+      "type": "string",
+      "enum": ["published", "no_update", "review_required", "blocked", "failed"]
+    },
+    "date": {"type": "string", "format": "date"},
+    "run_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]*(?:-[a-z0-9._:-]+)*$"
+    },
+    "release_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^release-[0-9a-f]{20}$"}
+      ]
+    },
+    "pulse_path": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "string",
+          "pattern": "^content/pulses/[0-9]{4}-[0-9]{2}-[0-9]{2}\\.md$"
+        }
+      ]
+    },
+    "artifact_urls": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^/artifacts/[A-Za-z0-9._~/-]+$"
+      }
+    },
+    "release_advanced": {"type": "boolean"},
+    "checkpoint_refreshed": {"type": "boolean"},
+    "reason": {"type": "string", "minLength": 1},
+    "evidence_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._:-]*(?:-[a-z0-9._:-]+)*$"
+      }
+    },
+    "pending_review_count": {"type": "integer", "minimum": 0},
+    "pending_review_path": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "published"}}},
+      "then": {
+        "properties": {
+          "pulse_path": {"type": "string"},
+          "artifact_urls": {"minItems": 1, "maxItems": 1},
+          "release_advanced": {"const": true},
+          "checkpoint_refreshed": {"const": true},
+          "pending_review_count": {"const": 0},
+          "pending_review_path": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "review_required"}}},
+      "then": {
+        "properties": {
+          "pulse_path": {"type": "null"},
+          "artifact_urls": {"maxItems": 0},
+          "release_advanced": {"const": false},
+          "checkpoint_refreshed": {"const": false},
+          "pending_review_count": {"minimum": 1},
+          "pending_review_path": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "no_update"}}},
+      "then": {
+        "properties": {
+          "release_id": {"type": "string"},
+          "pulse_path": {"type": "null"},
+          "artifact_urls": {"maxItems": 0},
+          "checkpoint_refreshed": {"const": true},
+          "pending_review_count": {"const": 0},
+          "pending_review_path": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["blocked", "failed"]}}},
+      "then": {
+        "properties": {
+          "pulse_path": {"type": "null"},
+          "artifact_urls": {"maxItems": 0},
+          "release_advanced": {"const": false},
+          "checkpoint_refreshed": {"const": false}
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,100 @@
+version: 1
+
+product:
+  project_name: imf-pulse
+  product_name: The Residual
+  timezone: Europe/Moscow
+
+report:
+  word_count:
+    minimum: 350
+    maximum: 650
+  max_signals: 3
+  required_sections:
+    - lead
+    - signals
+    - why-this-matters
+    - unresolved-question
+    - sources
+  require_meaningful_artifact: true
+  create_when_no_material_change: false
+  generated_image_label: Conceptual illustration — not research evidence
+
+novelty:
+  materiality_threshold: 0.65
+  require_evidence: true
+  preserve_definition_drift: true
+  preserve_contradictions: true
+
+artifacts:
+  public_root: public/artifacts
+  require_stable_url: true
+  require_caption: true
+  require_provenance: true
+  require_explicit_rights: true
+  allow_unknown_rights_in_public: false
+  hotlink_web_images: false
+  generated_images_are_evidence: false
+  scientific_chart_companions: [data, specification, rendered]
+
+paths:
+  source_config: config/sources.yaml
+  topics_config: config/topics.yaml
+  pulse_content: content/pulses
+  curated_knowledge: knowledge/curated
+  snapshot_root: imports/imf/snapshots
+  snapshot_pointer: imports/imf/current.json
+  release_root: data/releases
+  release_pointer: data/current.json
+  run_records: data/runs
+  review_queue: data/review
+
+snapshot:
+  allowed_modes: [live, snapshot]
+  default_mode: live
+  silent_fallback: false
+  verify_hashes_before_processing: true
+  copy_chunk_bytes: 1048576
+  max_file_bytes: 67108864
+  lock_timeout_seconds: 30
+
+extraction:
+  max_text_bytes: 8388608
+  max_notebook_cells: 5000
+  max_csv_rows: 100000
+  max_json_depth: 100
+  allow_ocr: false
+  execute_code: false
+  allowed_notebook_output_mime_types:
+    - text/plain
+    - text/markdown
+    - application/json
+  rejected_notebook_output_mime_types:
+    - text/html
+    - application/javascript
+    - application/vnd.jupyter.widget-view+json
+
+release:
+  pointer_is_commit_point: true
+  atomic_pointer_replace: true
+  retain_source_versions: true
+  required_gates:
+    - schema-validation
+    - cross-reference-validation
+    - citation-validation
+    - artifact-rights-validation
+    - pytest
+    - npm-test
+    - npm-build
+
+external_monitoring:
+  enabled: true
+  require_source_approval: true
+  download_or_execute_code: false
+
+scheduling:
+  enabled: true
+  timezone: Europe/Moscow
+  local_time: "08:00"
+  execution_environment: local
+  commit_push_or_deploy: false

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/state.schema.json",
+  "title": "IMF Pulse release processing state",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "release_id",
+    "snapshot_id",
+    "status",
+    "created_at",
+    "last_checked_at",
+    "input_fingerprint",
+    "semantic_fingerprint",
+    "source_fingerprints"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "release_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "status": {
+      "type": "string",
+      "enum": ["unchanged", "processed_no_pulse", "published", "failed"]
+    },
+    "created_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "last_checked_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "input_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+    "semantic_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+    "last_successful_run_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "latest_pulse_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "source_fingerprints": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["content_sha256", "extract_semantic_sha256", "extractor"],
+        "properties": {
+          "content_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+          "config_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+          "extract_semantic_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+          "extractor": {"type": "string", "minLength": 1},
+          "processing_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},
+          "last_processed_at": {"$ref": "common.schema.json#/$defs/timestamp"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,72 @@
+version: 1
+
+topics:
+  - id: imf
+    label: Intrinsic mode filtering
+    description: Iterative multiscale signal decomposition using local smoothers.
+    aliases: [intrinsic-mode-filtering, iterative-filtering]
+
+  - id: irmf
+    label: Intrinsic robust mode filtering
+    description: Robust local-estimation variants of the IMF recursion.
+    aliases: [intrinsic-robust-mode-filtering, robust-imf]
+
+  - id: signal-decomposition
+    label: Signal decomposition
+    description: Multiscale components, residual recursions, and reconstruction.
+    aliases: [multiscale-decomposition]
+
+  - id: linear-filtering
+    label: Linear filtering
+    description: Fixed linear smoothers, composite operators, and Fourier analysis.
+    aliases: [linear-smoothing]
+
+  - id: robust-local-estimation
+    label: Robust local estimation
+    description: Local M-estimation, bounded scores, robust loss, and solvers.
+    aliases: [local-m-estimation, robust-smoothing]
+
+  - id: contamination-models
+    label: Contamination models
+    description: Additive, masked, impulsive, and heavy-tailed observation noise.
+    aliases: [outliers, robust-contamination]
+
+  - id: recursive-error
+    label: Recursive error
+    description: Perturbation propagation through sequential residual filters.
+    aliases: [first-recursive-error, error-propagation]
+
+  - id: error-scaling
+    label: Error scaling
+    description: Bandwidth, energy, variance, RMSE, and sup-error normalization.
+    aliases: [variance-scaling, energy-scaling]
+
+  - id: boundary-behavior
+    label: Boundary behavior
+    description: Periodic, reflected, and finite-domain filter behavior.
+    aliases: [boundary-effects]
+
+  - id: target-definitions
+    label: Target definitions
+    description: Population, latent-signal, and clean same-method contrasts.
+    aliases: [estimands, reference-targets]
+
+  - id: robustness-parameter
+    label: Robustness parameter
+    description: Selection, interpretation, and sensitivity of the robust scale H.
+    aliases: [h-selection, robust-scale]
+
+  - id: numerical-experiments
+    label: Numerical experiments
+    description: Deterministic operators, simulations, controls, and Monte Carlo studies.
+    aliases: [simulation, monte-carlo]
+
+  - id: theoretical-gaps
+    label: Theoretical gaps
+    description: Incomplete proofs, unverified assumptions, contradictions, and open questions.
+    aliases: [open-theory, incomplete-results]
+
+  - id: uncertainty-calibration
+    label: Uncertainty calibration
+    description: Bootstrap, Jacobian, covariance, and simultaneous-error calibration.
+    aliases: [calibration]
