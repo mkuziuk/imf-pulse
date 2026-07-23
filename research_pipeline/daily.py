@@ -267,13 +267,20 @@ def _default_load_context(project_root: Path, mode: str, run_date: str) -> Daily
     scheduling = pulse.get("scheduling")
     if not _enabled(scheduling):
         raise DailyBlockedError("scheduling is not explicitly enabled")
+    publication = scheduling.get("publication") if isinstance(scheduling, Mapping) else None
     if not isinstance(scheduling, Mapping) or (
         scheduling.get("timezone") != "Europe/Moscow"
         or scheduling.get("local_time") != "08:00"
         or scheduling.get("execution_environment") != "local"
-        or scheduling.get("commit_push_or_deploy") is not False
+        or scheduling.get("commit_push_or_deploy") is not True
+        or not isinstance(publication, Mapping)
+        or publication.get("enabled") is not True
+        or publication.get("deploy_only_on_status") != "published"
+        or publication.get("require_clean_worktree") is not True
     ):
-        raise DailyBlockedError("scheduling must remain local at 08:00 Europe/Moscow without Git or deployment")
+        raise DailyBlockedError(
+            "scheduling must remain local at 08:00 Europe/Moscow with guarded published-only deployment"
+        )
     product = pulse.get("product")
     if not isinstance(product, Mapping) or product.get("timezone") != "Europe/Moscow":
         raise DailyBlockedError("the product timezone must be Europe/Moscow")

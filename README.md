@@ -10,7 +10,7 @@ The MVP implements all five planned phases without introducing a crawler, applic
 - read-only, hash-addressed ingestion of explicitly allowlisted local research;
 - deterministic change analysis, novelty ranking, and reviewed pulse proposals;
 - bounded arXiv metadata monitoring with immutable receipts and exact-hash review decisions;
-- one transactional daily command plus a local 08:00 `Europe/Moscow` scheduling contract.
+- one transactional daily command plus a guarded local publisher scheduled for 08:00 `Europe/Moscow`.
 
 The system is deliberately conservative. A new source or changed hash is not automatically news. External candidates, comparison findings, knowledge changes, and pulse prose remain review-gated; nothing downloads or extracts external papers automatically.
 
@@ -25,7 +25,7 @@ The system is deliberately conservative. A new source or changed hash is not aut
 - No-update runs retain the last accepted report instead of fabricating a pulse.
 - Public builds read only the separately sealed and audited `public-release/` tree.
 
-The architectural rationale is in [ADR 0001](docs/adr/0001-curated-local-releases.md), the implemented file map is in [docs/implementation-plan.md](docs/implementation-plan.md), and exact operator procedures are in [docs/operations.md](docs/operations.md).
+The architectural rationale is in [ADR 0001](docs/adr/0001-curated-local-releases.md) and [ADR 0002](docs/adr/0002-guarded-scheduled-publication.md), the implemented file map is in [docs/implementation-plan.md](docs/implementation-plan.md), and exact operator procedures are in [docs/operations.md](docs/operations.md).
 
 ## Install and run
 
@@ -120,7 +120,15 @@ It emits one compact JSON object:
 | `blocked` | A required reviewed configuration, executable, source root, or permission is unavailable. |
 | `failed` | A processing or validation gate failed; the accepted checkpoint is preserved. |
 
-The scheduled task runs this exact command independently at 08:00 `Europe/Moscow` in local mode. It may update local research state, but it never commits, pushes, opens pull requests, deploys, or changes GitHub settings. Scheduling is a Codex desktop task outside this repository; the YAML schedule declaration does not install an operating-system job.
+The daily research command itself never runs Git. The independent 08:00 `Europe/Moscow` Codex task calls the guarded wrapper instead:
+
+```bash
+.venv/bin/python scripts/run_scheduled_pipeline.py \
+  --project-root "$PROJECT_ROOT" \
+  --date "$DATE"
+```
+
+The wrapper requires clean local `main` exactly synchronized with the approved public `origin`. It runs the daily transaction once. A `published` result is exported and audited, then only current-date pulse/artifact files, the four curated knowledge files, and the sealed `public-release/` files may be committed and pushed. The wrapper waits for the matching Pages workflow to succeed. Every other status performs no Git or deployment action. It never force-pushes, tags, opens a pull request, or changes GitHub settings.
 
 ## Public release and GitHub Pages
 
@@ -138,7 +146,7 @@ npm run build
 
 The export contains only a sanitized current summary, five public knowledge JSONL files, accepted pulses, and cleared artifacts. It rejects raw source text, snapshots, extracts, run logs, absolute home paths, credential-like data, symlinks, extra files, hash mismatches, and media without public rights.
 
-GitHub Pages publication is a separate operator action. A reviewed push to `main` or an explicit dispatch of `.github/workflows/pages.yml` re-audits `public-release/`, runs Python and frontend tests, builds with the project-site base path, rejects source maps, and deploys only the resulting `dist/`. The daily task cannot invoke this workflow.
+A push to `main` or an explicit dispatch of `.github/workflows/pages.yml` re-audits `public-release/`, runs frontend tests, builds with the project-site base path, rejects source maps, and deploys only `dist/`. Code, configuration, workflow, deletion, rename, and manual-dispatch changes run the full Python suite too. A strictly classified content-only pulse commit skips that duplicate Python run because the guarded local publication transaction already passed it.
 
 ## Artifact and rights policy
 

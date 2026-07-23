@@ -1,6 +1,6 @@
 # Implemented Phase 1–5 architecture
 
-The Residual remains a file-based local MVP. It has no application server, database, vector index, broad crawler, automatic paper ingestion, or unattended public publisher.
+The Residual remains a file-based local MVP. It has no application server, database, vector index, broad crawler, or automatic paper ingestion. Its only unattended publisher is the fail-closed, published-only wrapper described below.
 
 ## Phase 1 — editorial site and artifact rendering
 
@@ -46,7 +46,9 @@ External approval does not download a paper, extract claims, edit curated knowle
 - Preflight requires the reviewed source, external, report, extraction, and scheduling policies. The command acquires a non-blocking local lock, reads the checkpoint, syncs allowlisted local bytes, monitors metadata, builds a candidate release, performs novelty analysis, requires exact review objects, and invokes the existing atomic publisher.
 - The stable result contract is `published`, `no_update`, `review_required`, `blocked`, or `failed`, with run/release identity, checkpoint effects, evidence IDs, and pending-review path.
 - Pending external candidates stop the run at `review_required`. A selected local development without its exact reviewed pulse proposal also stops at `review_required`. No-update runs create no report.
-- The Codex desktop scheduled task runs independently at 08:00 `Europe/Moscow` in local mode. It invokes only the daily command and never commits, pushes, deploys, or changes repository/hosting settings.
+- The Codex desktop scheduled task runs independently at 08:00 `Europe/Moscow` in local mode and invokes `scripts/run_scheduled_pipeline.py` once.
+- The wrapper validates the daily JSON result. Only `published` can pass clean-branch, synchronized-origin, exact-path, public-export, and public-audit gates before one non-force commit/push and a wait for the matching Pages workflow.
+- Every other result performs no Git operation. The wrapper cannot tag, open a pull request, force-push, change hosting settings, or modify the sibling source repository.
 
 The scheduling declaration in `config/pulse.yaml` is a reviewed policy prerequisite, not a system scheduler installer.
 
@@ -55,8 +57,8 @@ The scheduling declaration in `config/pulse.yaml` is a reviewed policy prerequis
 - Private `imports/`, `data/releases/`, `data/runs/`, extracts, source documents, and build caches are excluded from Git and deployment.
 - `scripts/export_public_release.py` atomically constructs `public-release/` from the current validated release: sanitized current metadata, five knowledge JSONL files, accepted pulses, and cleared artifact files only.
 - `scripts/audit_public_release.py` verifies the manifest allowlist and every hash, rights decision, path, file type, and public-data rule. The Vite content plugin repeats the boundary at build time.
-- `.github/workflows/pages.yml` re-audits the public export, runs Pytest and Vitest, builds with `/imf-pulse/` and hash routing, rejects source maps, and deploys only `dist/` through GitHub Pages.
-- A reviewed push to `main` or explicit workflow dispatch is the manual public-publish action. The research pipeline cannot trigger it.
+- `.github/workflows/pages.yml` re-audits the public export, runs Vitest, builds with `/imf-pulse/` and hash routing, rejects source maps, and deploys only `dist/` through GitHub Pages. A fail-closed change classifier skips duplicate Pytest only for exact content-only pulse commits; all other changes and manual dispatches run it.
+- A guarded scheduled push, reviewed operator push, or explicit workflow dispatch can start publication. The research pipeline itself cannot trigger it.
 
 ## Data layout
 

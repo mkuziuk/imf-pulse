@@ -160,9 +160,10 @@ The Codex desktop scheduled task is configured outside the repository with these
 - schedule: daily at 08:00 `Europe/Moscow`;
 - target: `$PROJECT_ROOT`;
 - mode: standalone local run;
-- command: the exact daily command above, once;
-- output: one concise status summary and a local pulse link only when published;
-- forbidden actions: source-repository writes, permission widening, code execution from sources, automatic external approval, Git commits/pushes/tags/PRs, GitHub Pages deployment, and hosting-setting changes.
+- command: `.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE"` exactly once;
+- output: one concise status summary and the Pages/run links only when deployed;
+- allowed publication action: one non-force commit/push followed by the matching Pages deployment, and only when the daily result is `published` and every wrapper guard passes;
+- forbidden actions: source-repository writes, permission widening, code execution from sources, automatic external approval, Git activity for any other status, tags, PRs, force-pushes, and hosting-setting changes.
 
 `config/pulse.yaml` records the approved schedule and safety prerequisites but does not install the task. Test the exact scheduled prompt manually in an independent local run before enabling or changing it. Codex desktop availability is required for an app-local scheduled task.
 
@@ -186,9 +187,9 @@ VITE_ROUTER_MODE=hash \
 npm run build
 ```
 
-Inspect `git status --short` and stage only reviewed code, documentation, workflow, and `public-release/` files. Never force-add ignored private snapshots, releases, receipts, run logs, or build caches. A deliberate push to `main` starts `.github/workflows/pages.yml`; an operator can also dispatch that workflow explicitly. It audits the public boundary again, runs all tests, builds without source maps, and deploys only `dist/`.
+Never force-add ignored private snapshots, releases, receipts, run logs, or build caches. A push to `main` starts `.github/workflows/pages.yml`; an operator can also dispatch it explicitly. The workflow always audits the public boundary, runs frontend tests, builds without source maps, and deploys only `dist/`. It skips the full Python suite only when a fail-closed diff classifier proves that every change is an added or modified approved content file. Code, configuration, workflow, deletion, rename, initial-history, and manual-dispatch cases run the full suite.
 
-The daily pipeline and scheduled task never run Git or GitHub commands. Updating local research state and publishing the public website are separate decisions.
+The daily research pipeline never runs Git or GitHub commands. The scheduled wrapper owns the narrow publication boundary. Before doing research it requires a clean `main` exactly equal to `origin/main` and authenticated GitHub CLI access. After `published`, it exports and audits `public-release/`, accepts only the current dated pulse/artifacts, four curated knowledge JSONL files, and sealed public export files, then stages those exact regular files. It aborts on deletions, renames, symlinks, unrelated changes, an origin race, failed push, or failed deployment. A failure after commit intentionally leaves the local commit for operator inspection; the next run blocks until local and remote state is reconciled.
 
 ## Rights checklist
 

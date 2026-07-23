@@ -97,4 +97,14 @@ scheduling:
   timezone: Europe/Moscow
   local_time: "08:00"
   execution_environment: local
-  commit_push_or_deploy: false
+  commit_push_or_deploy: true
+  publication:
+    enabled: true
+    deploy_only_on_status: published
+    require_clean_worktree: true
+    remote: origin
+    branch: main
+    repository: mkuziuk/imf-pulse
+    workflow: pages.yml
+    public_release_directory: public-release
+    site_url: https://mkuziuk.github.io/imf-pulse/
