@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 import pytest
 
+from research_pipeline.config import load_pipeline_config, resolve_live_root
 from research_pipeline.daily import (
     AnalysisOutcome,
     CandidateOutcome,
@@ -17,7 +18,6 @@ from research_pipeline.daily import (
     ExternalOutcome,
     PulseOutcome,
     SnapshotOutcome,
-    _default_load_context,
     _default_monitor_external,
     _install_immutable_bytes,
     _write_immutable_json,
@@ -368,16 +368,18 @@ def test_disabled_or_invalid_preflight_returns_blocked_without_state_work(
     assert not (project / "data").exists()
 
 
-def test_checked_in_preflight_anchors_relative_source_once(
+def test_checked_in_relative_source_is_anchored_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository = Path(__file__).resolve().parents[2]
     monkeypatch.delenv("IMF_SOURCE_ROOT", raising=False)
 
-    context = _default_load_context(repository, "live", RUN_DATE)
+    config = load_pipeline_config(repository / "config" / "sources.yaml")
+    source_root = resolve_live_root(config, "imf")
+    normalized_source_root = source_root.resolve(strict=False)
 
-    assert context.source_root == repository.parent / "imf"
-    assert context.source_root != repository / "imf"
+    assert normalized_source_root == repository.parent / "imf"
+    assert normalized_source_root != repository / "imf"
 
 
 def test_review_output_refuses_symlinked_parent(tmp_path: Path) -> None:

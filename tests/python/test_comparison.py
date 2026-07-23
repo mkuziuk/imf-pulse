@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import jsonschema
@@ -127,7 +128,7 @@ def test_compare_cli_emits_json_contract(tmp_path: Path) -> None:
     candidates.write_text(json.dumps(profile("claim-new", value="b")) + "\n", encoding="utf-8")
     completed = subprocess.run(
         [
-            str(PROJECT / ".venv/bin/python"),
+            sys.executable,
             str(PROJECT / "scripts/compare_knowledge.py"),
             "--existing",
             str(existing),
