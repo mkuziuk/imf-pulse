@@ -2,8 +2,8 @@
 
 This module intentionally has no full-text download API.  Provider responses are
 untrusted metadata: requests are built solely from validated configuration,
-raw Atom bytes are retained in a private immutable receipt, and public batches
-omit abstracts and provider-supplied links.
+raw provider bytes are retained in a private immutable receipt, and public
+batches omit abstracts and provider-supplied links.
 
 Stable orchestration API
 ------------------------
@@ -57,6 +57,7 @@ ARXIV = "http://arxiv.org/schemas/atom"
 IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 CATEGORY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)+$")
 TERM_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .+/'-]{0,119}$")
+DOI_RE = re.compile(r"^10\.[0-9]{4,9}/\S+$")
 MODERN_ARXIV_RE = re.compile(r"^(?P<base>\d{4}\.\d{4,5})(?:v(?P<version>[1-9]\d*))?$")
 LEGACY_ARXIV_RE = re.compile(
     r"^(?P<base>[A-Za-z0-9.-]+/\d{7})(?:v(?P<version>[1-9]\d*))?$"
@@ -69,6 +70,30 @@ PROFILE_KEYS = {
     "scope_keys",
     "value_key",
     "definition_bindings",
+}
+CROSSREF_TYPES = {
+    "book",
+    "book-chapter",
+    "book-section",
+    "edited-book",
+    "journal-article",
+    "monograph",
+    "proceedings-article",
+    "reference-book",
+}
+CROSSREF_SOURCE_TYPES = {
+    "journal-article": "published_primary_paper",
+    "proceedings-article": "published_primary_paper",
+    "book": "scholarly_book",
+    "monograph": "scholarly_book",
+    "edited-book": "scholarly_book",
+    "reference-book": "scholarly_book",
+    "book-chapter": "book_chapter",
+    "book-section": "book_chapter",
+}
+PROVIDER_PRIORITY = {
+    "crossref": 0,
+    "arxiv": 1,
 }
 
 
@@ -150,7 +175,9 @@ def _safe_relative(value: Any, name: str) -> str:
         raise ExternalMonitoringError(f"{name} must be a safe project-relative path") from exc
 
 
-def _validate_https_endpoint(url: str, allowed_hosts: set[str]) -> str:
+def _validate_https_endpoint(
+    url: str, allowed_hosts: set[str], *, host: str, path: str, label: str
+) -> str:
     parsed = urllib.parse.urlsplit(url)
     if (
         parsed.scheme != "https"
@@ -160,9 +187,12 @@ def _validate_https_endpoint(url: str, allowed_hosts: set[str]) -> str:
         or parsed.port not in (None, 443)
         or parsed.query
         or parsed.fragment
-        or parsed.path != "/api/query"
+        or parsed.hostname != host
+        or parsed.path != path
     ):
-        raise ExternalMonitoringError("arXiv endpoint is outside the fixed HTTPS allowlist")
+        raise ExternalMonitoringError(
+            f"{label} endpoint is outside the fixed HTTPS allowlist"
+        )
     return urllib.parse.urlunsplit(("https", parsed.hostname, parsed.path, "", ""))
 
 
@@ -217,13 +247,21 @@ def load_external_config(path: Path) -> dict[str, Any]:
     ):
         raise ExternalMonitoringError("allowed_hosts must be a unique lowercase host list")
     allowed_hosts = set(raw_hosts)
-    if allowed_hosts != {"export.arxiv.org"}:
-        raise ExternalMonitoringError("Phase 4 MVP permits only export.arxiv.org")
-    max_queries = _integer(policy["max_queries"], "max_queries", 1, 5)
+    approved_hosts = {"api.crossref.org", "export.arxiv.org"}
+    if allowed_hosts != approved_hosts:
+        raise ExternalMonitoringError(
+            "literature monitoring permits only the reviewed arXiv and Crossref hosts"
+        )
+    max_queries = _integer(policy["max_queries"], "max_queries", 1, 8)
     max_results = _integer(
         policy["max_results_per_query"], "max_results_per_query", 1, 50
     )
-    max_lookback = _integer(policy["max_lookback_days"], "max_lookback_days", 1, 90)
+    # Historical discovery is intentional for a mature research area. Keep the
+    # time horizon finite while bounding network and review volume separately
+    # with the query/result/response limits above.
+    max_lookback = _integer(
+        policy["max_lookback_days"], "max_lookback_days", 1, 36_525
+    )
     timeout = _number(policy["timeout_seconds"], "timeout_seconds", 1, 30)
     max_bytes = _integer(
         policy["max_response_bytes"], "max_response_bytes", 1024, 10 * 1024 * 1024
@@ -254,11 +292,15 @@ def load_external_config(path: Path) -> dict[str, Any]:
         raise ExternalMonitoringError("review decisions must use a data/review JSONL ledger")
 
     providers = _mapping(raw["providers"], "providers")
-    _exact_keys(providers, {"arxiv"}, "providers")
+    _exact_keys(providers, {"arxiv", "crossref"}, "providers")
     arxiv = _mapping(providers["arxiv"], "providers.arxiv")
     _exact_keys(arxiv, {"endpoint", "response_media_types"}, "providers.arxiv")
     endpoint = _validate_https_endpoint(
-        _string(arxiv["endpoint"], "providers.arxiv.endpoint", maximum=500), allowed_hosts
+        _string(arxiv["endpoint"], "providers.arxiv.endpoint", maximum=500),
+        allowed_hosts,
+        host="export.arxiv.org",
+        path="/api/query",
+        label="arXiv",
     )
     media_types = arxiv["response_media_types"]
     permitted_media = {"application/atom+xml", "application/xml", "text/xml"}
@@ -269,6 +311,24 @@ def load_external_config(path: Path) -> dict[str, Any]:
         or len(set(media_types)) != len(media_types)
     ):
         raise ExternalMonitoringError("arXiv response media types are invalid")
+    crossref = _mapping(providers["crossref"], "providers.crossref")
+    _exact_keys(
+        crossref,
+        {"endpoint", "response_media_types"},
+        "providers.crossref",
+    )
+    crossref_endpoint = _validate_https_endpoint(
+        _string(
+            crossref["endpoint"], "providers.crossref.endpoint", maximum=500
+        ),
+        allowed_hosts,
+        host="api.crossref.org",
+        path="/works",
+        label="Crossref",
+    )
+    crossref_media_types = crossref["response_media_types"]
+    if crossref_media_types != ["application/json"]:
+        raise ExternalMonitoringError("Crossref response media types are invalid")
 
     queries_raw = raw["queries"]
     if not isinstance(queries_raw, list) or not 1 <= len(queries_raw) <= max_queries:
@@ -277,16 +337,18 @@ def load_external_config(path: Path) -> dict[str, Any]:
     seen_query_ids: set[str] = set()
     for index, query_value in enumerate(queries_raw):
         query = _mapping(query_value, f"queries[{index}]")
-        _exact_keys(
-            query,
-            {"id", "provider", "terms", "categories", "max_results", "lookback_days"},
-            f"queries[{index}]",
+        provider = query.get("provider")
+        expected_query_fields = (
+            {"id", "provider", "terms", "categories", "max_results", "lookback_days"}
+            if provider == "arxiv"
+            else {"id", "provider", "terms", "types", "max_results", "lookback_days"}
         )
+        _exact_keys(query, expected_query_fields, f"queries[{index}]")
         query_id = _identifier(query["id"], f"queries[{index}].id")
         if query_id in seen_query_ids:
             raise ExternalMonitoringError(f"duplicate external query id: {query_id}")
-        if query["provider"] != "arxiv":
-            raise ExternalMonitoringError("Phase 4 MVP supports only arXiv")
+        if provider not in {"arxiv", "crossref"}:
+            raise ExternalMonitoringError("external query provider is not approved")
         terms = query["terms"]
         if (
             not isinstance(terms, list)
@@ -295,31 +357,46 @@ def load_external_config(path: Path) -> dict[str, Any]:
             or any(not isinstance(term, str) or not TERM_RE.fullmatch(term) for term in terms)
         ):
             raise ExternalMonitoringError(f"query {query_id} has unsafe or duplicate terms")
-        categories = query["categories"]
-        if (
-            not isinstance(categories, list)
-            or not 1 <= len(categories) <= 10
-            or len(set(categories)) != len(categories)
-            or any(
-                not isinstance(category, str) or not CATEGORY_RE.fullmatch(category)
-                for category in categories
-            )
-        ):
-            raise ExternalMonitoringError(f"query {query_id} has invalid categories")
         query_max = _integer(query["max_results"], f"query {query_id}.max_results", 1, max_results)
         lookback = _integer(
             query["lookback_days"], f"query {query_id}.lookback_days", 1, max_lookback
         )
-        queries.append(
-            {
-                "id": query_id,
-                "provider": "arxiv",
-                "terms": list(terms),
-                "categories": list(categories),
-                "max_results": query_max,
-                "lookback_days": lookback,
-            }
-        )
+        normalized_query: dict[str, Any] = {
+            "id": query_id,
+            "provider": provider,
+            "terms": list(terms),
+            "max_results": query_max,
+            "lookback_days": lookback,
+        }
+        if provider == "arxiv":
+            categories = query["categories"]
+            if (
+                not isinstance(categories, list)
+                or not 1 <= len(categories) <= 10
+                or len(set(categories)) != len(categories)
+                or any(
+                    not isinstance(category, str)
+                    or not CATEGORY_RE.fullmatch(category)
+                    for category in categories
+                )
+            ):
+                raise ExternalMonitoringError(
+                    f"query {query_id} has invalid categories"
+                )
+            normalized_query["categories"] = list(categories)
+        else:
+            work_types = query["types"]
+            if (
+                not isinstance(work_types, list)
+                or not 1 <= len(work_types) <= len(CROSSREF_TYPES)
+                or len(set(work_types)) != len(work_types)
+                or any(item not in CROSSREF_TYPES for item in work_types)
+            ):
+                raise ExternalMonitoringError(
+                    f"query {query_id} has invalid Crossref work types"
+                )
+            normalized_query["types"] = list(work_types)
+        queries.append(normalized_query)
         seen_query_ids.add(query_id)
 
     return {
@@ -345,7 +422,11 @@ def load_external_config(path: Path) -> dict[str, Any]:
             "arxiv": {
                 "endpoint": endpoint,
                 "response_media_types": list(media_types),
-            }
+            },
+            "crossref": {
+                "endpoint": crossref_endpoint,
+                "response_media_types": list(crossref_media_types),
+            },
         },
         "queries": queries,
     }
@@ -411,6 +492,46 @@ def build_arxiv_request(config: Mapping[str, Any], query: Mapping[str, Any], as_
     if len(result) > 8192:
         raise ExternalMonitoringError("constructed metadata request is too long")
     return result
+
+
+def build_crossref_request(
+    config: Mapping[str, Any], query: Mapping[str, Any], as_of: datetime
+) -> str:
+    """Build one bounded Crossref works request from reviewed fields."""
+
+    provider = config["providers"]["crossref"]
+    start = (as_of - timedelta(days=query["lookback_days"])).date().isoformat()
+    end = as_of.date().isoformat()
+    filters = [f"from-pub-date:{start}", f"until-pub-date:{end}"]
+    filters.extend(f"type:{item}" for item in query["types"])
+    query_string = urllib.parse.urlencode(
+        [
+            ("query.title", query["terms"][0]),
+            ("filter", ",".join(filters)),
+            ("rows", str(query["max_results"])),
+            (
+                "select",
+                "DOI,title,author,published,indexed,type,container-title,"
+                "subject,abstract,URL,license,ISBN",
+            ),
+        ],
+        quote_via=urllib.parse.quote,
+        safe="",
+    )
+    result = f"{provider['endpoint']}?{query_string}"
+    if len(result) > 8192:
+        raise ExternalMonitoringError("constructed Crossref request is too long")
+    return result
+
+
+def build_metadata_request(
+    config: Mapping[str, Any], query: Mapping[str, Any], as_of: datetime
+) -> str:
+    if query["provider"] == "arxiv":
+        return build_arxiv_request(config, query, as_of)
+    if query["provider"] == "crossref":
+        return build_crossref_request(config, query, as_of)
+    raise ExternalMonitoringError("metadata query provider is unsupported")
 
 
 def fetch_metadata(
@@ -629,6 +750,197 @@ def _parse_arxiv_entries(
     return candidates
 
 
+def _crossref_date(value: Any, name: str) -> datetime:
+    if not isinstance(value, Mapping):
+        raise ExternalMonitoringError(f"Crossref {name} date is missing")
+    parts_outer = value.get("date-parts")
+    if (
+        not isinstance(parts_outer, list)
+        or not parts_outer
+        or not isinstance(parts_outer[0], list)
+        or not 1 <= len(parts_outer[0]) <= 3
+        or any(type(item) is not int for item in parts_outer[0])
+    ):
+        raise ExternalMonitoringError(f"Crossref {name} date is invalid")
+    parts = list(parts_outer[0]) + [1, 1]
+    try:
+        return datetime(parts[0], parts[1], parts[2], tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise ExternalMonitoringError(f"Crossref {name} date is invalid") from exc
+
+
+def _crossref_updated(value: Any, published: datetime) -> datetime:
+    if not isinstance(value, Mapping):
+        return published
+    raw = value.get("date-time")
+    if not isinstance(raw, str):
+        return published
+    updated = _parse_timestamp(raw, "Crossref indexed date")
+    return max(published, updated)
+
+
+def _crossref_authors(value: Any) -> list[str]:
+    if not isinstance(value, list) or len(value) > 200:
+        return []
+    authors: list[str] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            continue
+        given = item.get("given") if isinstance(item.get("given"), str) else ""
+        family = item.get("family") if isinstance(item.get("family"), str) else ""
+        name = " ".join(f"{given} {family}".split())
+        if name and len(name) <= 500:
+            authors.append(name)
+    return authors
+
+
+def _crossref_text_list(value: Any, maximum_items: int = 100) -> list[str]:
+    if not isinstance(value, list) or len(value) > maximum_items:
+        return []
+    return [
+        " ".join(item.split())
+        for item in value
+        if isinstance(item, str) and item.strip()
+    ]
+
+
+def _search_form(value: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", value.casefold()).split())
+
+
+def _crossref_relevant(item: Mapping[str, Any], terms: Sequence[str]) -> bool:
+    fields: list[str] = []
+    fields.extend(_crossref_text_list(item.get("title"), 10))
+    fields.extend(_crossref_text_list(item.get("container-title"), 10))
+    fields.extend(_crossref_text_list(item.get("subject"), 100))
+    abstract = item.get("abstract")
+    if isinstance(abstract, str):
+        fields.append(abstract)
+    searchable = _search_form(" ".join(fields))
+    return any(_search_form(term) in searchable for term in terms)
+
+
+def _parse_crossref_items(
+    payload: bytes,
+    *,
+    query: Mapping[str, Any],
+    response_sha256: str,
+    as_of: datetime,
+) -> list[dict[str, Any]]:
+    try:
+        value = strict_json_loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise ExternalMonitoringError("Crossref metadata is not valid JSON") from exc
+    if (
+        not isinstance(value, Mapping)
+        or value.get("status") != "ok"
+        or value.get("message-type") != "work-list"
+    ):
+        raise ExternalMonitoringError("Crossref response status is invalid")
+    message = value.get("message")
+    if not isinstance(message, Mapping) or not isinstance(message.get("items"), list):
+        raise ExternalMonitoringError("Crossref response has no work list")
+    items = message["items"]
+    if len(items) > query["max_results"]:
+        raise ExternalMonitoringError("Crossref response exceeds the result cap")
+    start = as_of - timedelta(days=query["lookback_days"])
+    candidates: list[dict[str, Any]] = []
+    for entry_index, raw_item in enumerate(items):
+        if not isinstance(raw_item, Mapping):
+            raise ExternalMonitoringError("Crossref work is not an object")
+        if raw_item.get("type") not in query["types"]:
+            continue
+        if not _crossref_relevant(raw_item, query["terms"]):
+            continue
+        raw_doi = raw_item.get("DOI")
+        if not isinstance(raw_doi, str):
+            continue
+        doi = raw_doi.strip().lower()
+        if not DOI_RE.fullmatch(doi) or len(doi) > 300:
+            continue
+        titles = _crossref_text_list(raw_item.get("title"), 10)
+        authors = _crossref_authors(raw_item.get("author"))
+        if not titles or not authors:
+            continue
+        title = _normalized_text(titles[0], "Crossref title", 2000)
+        published = _crossref_date(raw_item.get("published"), "published")
+        updated = _crossref_updated(raw_item.get("indexed"), published)
+        if not start <= published <= as_of or updated > as_of:
+            continue
+        work_type = str(raw_item["type"])
+        source_type = CROSSREF_SOURCE_TYPES[work_type]
+        abstract = raw_item.get("abstract")
+        abstract_text = (
+            " ".join(abstract.split()) if isinstance(abstract, str) else ""
+        )
+        stable_id = (
+            "candidate-crossref-"
+            + hashlib.sha256(f"crossref:{doi}".encode()).hexdigest()[:20]
+        )
+        quoted_doi = urllib.parse.quote(doi, safe="/()")
+        candidate: dict[str, Any] = {
+            "schema_version": "1.0.0",
+            "id": stable_id,
+            "provider": "crossref",
+            "external_id": doi,
+            "versioned_external_id": doi,
+            "version": 1,
+            "title": title,
+            "authors": authors,
+            "published_at": _timestamp(published),
+            "updated_at": _timestamp(updated),
+            "categories": [f"crossref.{work_type}"],
+            "doi": doi,
+            "canonical_url": f"https://doi.org/{quoted_doi}",
+            "abstract_sha256": hashlib.sha256(
+                abstract_text.encode("utf-8")
+            ).hexdigest(),
+            "source_type": source_type,
+            "publication_status": "published",
+            "rights_status": "unknown",
+            "review_status": "pending",
+            "provenance": {
+                "query_ids": [query["id"]],
+                "receipts": [
+                    {
+                        "query_id": query["id"],
+                        "response_sha256": response_sha256,
+                        "entry_index": entry_index,
+                    }
+                ],
+            },
+        }
+        candidate["candidate_sha256"] = canonical_json_hash(
+            _candidate_identity_payload(candidate)
+        )
+        candidates.append(candidate)
+    return candidates
+
+
+def parse_metadata_candidates(
+    payload: bytes,
+    *,
+    query: Mapping[str, Any],
+    response_sha256: str,
+    as_of: datetime,
+) -> list[dict[str, Any]]:
+    if query["provider"] == "arxiv":
+        return _parse_arxiv_entries(
+            payload,
+            query=query,
+            response_sha256=response_sha256,
+            as_of=as_of,
+        )
+    if query["provider"] == "crossref":
+        return _parse_crossref_items(
+            payload,
+            query=query,
+            response_sha256=response_sha256,
+            as_of=as_of,
+        )
+    raise ExternalMonitoringError("metadata candidate provider is unsupported")
+
+
 def validate_candidate_integrity(candidate: Mapping[str, Any]) -> None:
     required = {
         "schema_version",
@@ -658,17 +970,21 @@ def validate_candidate_integrity(candidate: Mapping[str, Any]) -> None:
         raise ExternalMonitoringError("candidate hash is malformed")
     if canonical_json_hash(_candidate_identity_payload(candidate)) != digest:
         raise ExternalMonitoringError("candidate identity hash does not match metadata")
+    provider = candidate.get("provider")
+    if provider not in {"arxiv", "crossref"}:
+        raise ExternalMonitoringError("candidate provider is invalid")
     expected_id = (
-        "candidate-arxiv-"
-        + hashlib.sha256(f"arxiv:{candidate.get('external_id')}".encode()).hexdigest()[:20]
+        f"candidate-{provider}-"
+        + hashlib.sha256(
+            f"{provider}:{candidate.get('external_id')}".encode()
+        ).hexdigest()[:20]
     )
     if candidate.get("id") != expected_id:
-        raise ExternalMonitoringError("candidate stable id does not match its arXiv identity")
+        raise ExternalMonitoringError(
+            "candidate stable id does not match its provider identity"
+        )
     if (
         candidate.get("schema_version") != "1.0.0"
-        or candidate.get("provider") != "arxiv"
-        or candidate.get("source_type") != "preprint"
-        or candidate.get("publication_status") != "preprint"
         or candidate.get("rights_status") != "unknown"
         or candidate.get("review_status") != "pending"
     ):
@@ -676,18 +992,51 @@ def validate_candidate_integrity(candidate: Mapping[str, Any]) -> None:
     external_id = candidate.get("external_id")
     versioned_id = candidate.get("versioned_external_id")
     version = candidate.get("version")
-    if not isinstance(external_id, str) or not isinstance(versioned_id, str) or type(version) is not int:
-        raise ExternalMonitoringError("candidate arXiv identity fields are invalid")
-    parsed_base, parsed_versioned, parsed_version = _arxiv_identity(
-        f"https://arxiv.org/abs/{urllib.parse.quote(versioned_id, safe='/.' )}"
-    )
-    if (parsed_base, parsed_versioned, parsed_version) != (
-        external_id,
-        versioned_id,
-        version,
+    if (
+        not isinstance(external_id, str)
+        or not isinstance(versioned_id, str)
+        or type(version) is not int
     ):
-        raise ExternalMonitoringError("candidate arXiv version fields are inconsistent")
-    expected_url = f"https://arxiv.org/abs/{urllib.parse.quote(versioned_id, safe='/.' )}"
+        raise ExternalMonitoringError("candidate provider identity fields are invalid")
+    if provider == "arxiv":
+        parsed_base, parsed_versioned, parsed_version = _arxiv_identity(
+            f"https://arxiv.org/abs/{urllib.parse.quote(versioned_id, safe='/.' )}"
+        )
+        if (parsed_base, parsed_versioned, parsed_version) != (
+            external_id,
+            versioned_id,
+            version,
+        ):
+            raise ExternalMonitoringError(
+                "candidate arXiv version fields are inconsistent"
+            )
+        expected_url = (
+            "https://arxiv.org/abs/"
+            + urllib.parse.quote(versioned_id, safe="/.")
+        )
+        if (
+            candidate.get("source_type") != "preprint"
+            or candidate.get("publication_status") != "preprint"
+        ):
+            raise ExternalMonitoringError("arXiv candidate classification is invalid")
+    else:
+        if (
+            external_id != versioned_id
+            or version != 1
+            or not DOI_RE.fullmatch(external_id)
+            or candidate.get("doi") != external_id
+            or candidate.get("source_type")
+            not in {
+                "published_primary_paper",
+                "scholarly_book",
+                "book_chapter",
+            }
+            or candidate.get("publication_status") != "published"
+        ):
+            raise ExternalMonitoringError("Crossref candidate identity is invalid")
+        expected_url = (
+            "https://doi.org/" + urllib.parse.quote(external_id, safe="/()")
+        )
     if candidate.get("canonical_url") != expected_url:
         raise ExternalMonitoringError("candidate canonical URL is inconsistent")
     if not isinstance(candidate.get("title"), str) or not candidate["title"].strip() or len(candidate["title"]) > 2000:
@@ -721,7 +1070,7 @@ def validate_candidate_integrity(candidate: Mapping[str, Any]) -> None:
     if doi is not None and (
         not isinstance(doi, str)
         or len(doi) > 300
-        or not re.fullmatch(r"10\.[0-9]{4,9}/\S+", doi)
+        or not DOI_RE.fullmatch(doi)
     ):
         raise ExternalMonitoringError("candidate DOI is invalid")
     if not isinstance(candidate.get("abstract_sha256"), str) or not SHA256_RE.fullmatch(candidate["abstract_sha256"]):
@@ -780,7 +1129,9 @@ def _merge_candidates(candidates: Iterable[Mapping[str, Any]]) -> list[dict[str,
         if candidate["version"] < current["version"]:
             continue
         if candidate["candidate_sha256"] != current["candidate_sha256"]:
-            raise ExternalMonitoringError("same arXiv version has conflicting metadata")
+            raise ExternalMonitoringError(
+                "same provider identity has conflicting metadata"
+            )
         query_ids = sorted(
             set(current["provenance"]["query_ids"])
             | set(candidate["provenance"]["query_ids"])
@@ -796,7 +1147,21 @@ def _merge_candidates(candidates: Iterable[Mapping[str, Any]]) -> list[dict[str,
             "query_ids": query_ids,
             "receipts": [receipts_by_key[key] for key in sorted(receipts_by_key)],
         }
-    return [merged[key] for key in sorted(merged)]
+    source_priority = {
+        "published_primary_paper": 0,
+        "scholarly_book": 1,
+        "book_chapter": 2,
+        "preprint": 3,
+    }
+    return sorted(
+        merged.values(),
+        key=lambda item: (
+            source_priority.get(str(item.get("source_type")), 9),
+            PROVIDER_PRIORITY.get(str(item.get("provider")), 9),
+            str(item.get("published_at", "")),
+            str(item["id"]),
+        ),
+    )
 
 
 def _read_regular_json(path: Path, maximum_bytes: int = 16 * 1024 * 1024) -> Any:
@@ -984,13 +1349,19 @@ def validate_batch_integrity(batch: Mapping[str, Any]) -> None:
         if not isinstance(request_url, str):
             raise ExternalMonitoringError("batch request URL is invalid")
         parsed_url = urllib.parse.urlsplit(request_url)
+        provider = query.get("provider")
+        expected_endpoint = {
+            "arxiv": ("export.arxiv.org", "/api/query"),
+            "crossref": ("api.crossref.org", "/works"),
+        }.get(provider)
         if (
-            parsed_url.scheme != "https"
-            or parsed_url.hostname != "export.arxiv.org"
+            expected_endpoint is None
+            or parsed_url.scheme != "https"
+            or parsed_url.hostname != expected_endpoint[0]
             or parsed_url.username is not None
             or parsed_url.password is not None
             or parsed_url.port not in (None, 443)
-            or parsed_url.path != "/api/query"
+            or parsed_url.path != expected_endpoint[1]
             or not parsed_url.query
             or parsed_url.fragment
         ):
@@ -1049,19 +1420,24 @@ def run_external_search(
     for index, query in enumerate(config["queries"]):
         if index:
             sleeper(policy["minimum_request_interval_seconds"])
-        request_url = build_arxiv_request(config, query, cutoff)
+        request_url = build_metadata_request(config, query, cutoff)
+        provider = config["providers"][query["provider"]]
         response_value = fetch(
             request_url,
             timeout_seconds=policy["timeout_seconds"],
             max_bytes=policy["max_response_bytes"],
             allowed_hosts=policy["allowed_hosts"],
-            media_types=config["providers"]["arxiv"]["response_media_types"],
+            media_types=provider["response_media_types"],
             user_agent=policy["user_agent"],
         )
         if isinstance(response_value, bytes):
             response = FetchedMetadata(
                 response_value,
-                "application/atom+xml",
+                (
+                    "application/atom+xml"
+                    if query["provider"] == "arxiv"
+                    else "application/json"
+                ),
                 request_url,
             )
         elif isinstance(response_value, FetchedMetadata):
@@ -1070,7 +1446,7 @@ def run_external_search(
             raise ExternalMonitoringError("metadata fetcher returned an invalid response")
         if response.status != 200 or response.final_url != request_url:
             raise ExternalMonitoringError("metadata fetcher returned an unsafe status or URL")
-        if response.content_type not in config["providers"]["arxiv"]["response_media_types"]:
+        if response.content_type not in provider["response_media_types"]:
             raise ExternalMonitoringError("metadata fetcher returned an unsafe media type")
         if response.content_encoding not in (None, "", "identity"):
             raise ExternalMonitoringError("metadata fetcher returned compressed bytes")
@@ -1084,7 +1460,7 @@ def run_external_search(
     receipt_paths: list[str] = []
     per_query_candidates: dict[str, list[dict[str, Any]]] = {}
     for query, request_url, response, response_sha256 in fetched:
-        candidates = _parse_arxiv_entries(
+        candidates = parse_metadata_candidates(
             response.body,
             query=query,
             response_sha256=response_sha256,
@@ -1092,11 +1468,14 @@ def run_external_search(
         )
         per_query_candidates[query["id"]] = candidates
         parsed_candidates.extend(candidates)
-        receipt_relative = f"{policy['private_receipt_root']}/arxiv"
+        receipt_relative = (
+            f"{policy['private_receipt_root']}/{query['provider']}"
+        )
+        receipt_suffix = "atom" if query["provider"] == "arxiv" else "json"
         receipt_path, _ = _write_immutable(
             project_root,
             receipt_relative,
-            f"{response_sha256}.atom",
+            f"{response_sha256}.{receipt_suffix}",
             response.body,
             private=True,
         )
@@ -1104,7 +1483,7 @@ def run_external_search(
         query_records.append(
             {
                 "id": query["id"],
-                "provider": "arxiv",
+                "provider": query["provider"],
                 "request_url": request_url,
                 "response_sha256": response_sha256,
                 "response_size_bytes": len(response.body),
@@ -1258,7 +1637,8 @@ def _validate_decision(decision: Mapping[str, Any]) -> None:
     ):
         raise ExternalMonitoringError("decision batch id is invalid")
     if not isinstance(decision.get("candidate_id"), str) or not re.fullmatch(
-        r"candidate-arxiv-[0-9a-f]{20}", decision["candidate_id"]
+        r"candidate-(?:arxiv|crossref)-[0-9a-f]{20}",
+        decision["candidate_id"],
     ):
         raise ExternalMonitoringError("decision candidate id is invalid")
     if not isinstance(decision.get("candidate_sha256"), str) or not SHA256_RE.fullmatch(

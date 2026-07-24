@@ -186,8 +186,8 @@ def test_no_update_refreshes_checkpoint_without_creating_a_pulse(tmp_path: Path)
     assert calls == [
         "load_context",
         "read_checkpoint",
-        "sync_local",
         "monitor_external",
+        "sync_local",
         "build_candidate",
         "analyze_candidate",
         "publish_candidate",
@@ -216,6 +216,7 @@ def test_pending_external_candidates_stop_before_extraction_or_publication(
     assert result.pending_review_count == 1
     assert result.release_advanced is False
     assert result.checkpoint_refreshed is False
+    assert "sync_local" not in calls
     assert "build_candidate" not in calls
     assert "publish_candidate" not in calls
 

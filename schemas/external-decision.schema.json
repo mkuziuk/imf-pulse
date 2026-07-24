@@ -21,7 +21,10 @@
     "id": {"type": "string", "pattern": "^external-decision-[0-9a-f]{20}$"},
     "decision_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "batch_id": {"type": "string", "pattern": "^external-batch-[0-9a-f]{20}$"},
-    "candidate_id": {"type": "string", "pattern": "^candidate-arxiv-[0-9a-f]{20}$"},
+    "candidate_id": {
+      "type": "string",
+      "pattern": "^candidate-(?:arxiv|crossref)-[0-9a-f]{20}$"
+    },
     "candidate_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "decision": {"enum": ["approved", "rejected"]},
     "reviewer": {"type": "string", "minLength": 1, "maxLength": 300},

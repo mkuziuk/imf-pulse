@@ -1,21 +1,23 @@
 version: 1
 
-# Phase 4 is deliberately a bounded metadata monitor, not a crawler.  The
-# endpoint, host, query vocabulary, date window, and result limits are all
-# fixed here and validated before any request is made.
+# Literature-first, bounded metadata monitoring. Endpoints, hosts, vocabulary,
+# work types, date windows, and result limits are fixed and validated before a
+# request is made. Provider responses remain untrusted and review-gated.
 policy:
   metadata_only: true
   download_full_text: false
   allowed_schemes: [https]
-  allowed_hosts: [export.arxiv.org]
+  allowed_hosts: [api.crossref.org, export.arxiv.org]
   reject_redirects: true
-  max_queries: 3
+  max_queries: 6
   max_results_per_query: 20
-  max_lookback_days: 30
+  # Mature methods need historical discovery, not only a news window. Requests
+  # remain bounded by the result caps below.
+  max_lookback_days: 36525
   timeout_seconds: 15
   max_response_bytes: 2097152
   minimum_request_interval_seconds: 3
-  user_agent: The-Residual/0.1 (local research monitor; metadata only)
+  user_agent: The-Residual/0.2 (local literature monitor; metadata only)
   private_receipt_root: tmp/external-receipts
   candidate_batch_root: data/external/batches
   decision_ledger: data/review/external-decisions.jsonl
@@ -27,6 +29,10 @@ providers:
       - application/atom+xml
       - application/xml
       - text/xml
+  crossref:
+    endpoint: https://api.crossref.org/works
+    response_media_types:
+      - application/json
 
 queries:
   - id: arxiv-iterative-filtering
@@ -37,7 +43,8 @@ queries:
       - robust iterative filtering
     categories: [eess.SP, math.ST, stat.ME]
     max_results: 20
-    lookback_days: 14
+    # arXiv's full operating history, approximately 1991 onward.
+    lookback_days: 12784
 
   - id: arxiv-robust-local-estimation
     provider: arxiv
@@ -47,4 +54,50 @@ queries:
       - contamination model signal estimation
     categories: [eess.SP, math.ST, stat.ME]
     max_results: 20
-    lookback_days: 14
+    lookback_days: 12784
+
+  - id: crossref-filtering-papers
+    provider: crossref
+    terms:
+      - iterative filtering
+      - intrinsic mode filtering
+      - adaptive local iterative filtering
+      - iterative filtering decomposition
+    types: [journal-article, proceedings-article]
+    max_results: 12
+    # A century-scale Crossref window includes foundational robust statistics.
+    lookback_days: 36525
+
+  - id: crossref-robust-estimation-papers
+    provider: crossref
+    terms:
+      - robust local estimation
+      - local M-estimation
+      - robust smoothing
+      - Huber contamination
+      - robust signal decomposition
+    types: [journal-article, proceedings-article]
+    max_results: 12
+    lookback_days: 36525
+
+  - id: crossref-contamination-and-decomposition-papers
+    provider: crossref
+    terms:
+      - robust signal decomposition
+      - contamination model
+      - impulsive noise decomposition
+      - heavy-tailed signal estimation
+    types: [journal-article, proceedings-article]
+    max_results: 12
+    lookback_days: 36525
+
+  - id: crossref-books-and-chapters
+    provider: crossref
+    terms:
+      - robust signal processing
+      - robust nonparametric estimation
+      - multiscale signal decomposition
+      - contamination models
+    types: [book, monograph, edited-book, reference-book, book-chapter, book-section]
+    max_results: 12
+    lookback_days: 36525

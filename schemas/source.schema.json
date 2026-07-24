@@ -30,6 +30,8 @@
       "type": "string",
       "enum": [
         "published_primary_paper",
+        "scholarly_book",
+        "book_chapter",
         "preprint",
         "internal_theory_draft",
         "local_notebook",

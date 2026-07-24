@@ -26,6 +26,18 @@ novelty:
   preserve_definition_drift: true
   preserve_contradictions: true
 
+editorial_focus:
+  primary: external_literature
+  local_research_role: supporting_context
+  priority_order:
+    - published_primary_paper
+    - scholarly_book
+    - book_chapter
+    - preprint
+    - local_research
+  metadata_is_evidence: false
+  require_exact_hash_review: true
+
 artifacts:
   public_root: public/artifacts
   require_stable_url: true

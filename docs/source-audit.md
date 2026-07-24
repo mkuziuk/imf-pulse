@@ -28,7 +28,7 @@ Web images require an explicit license or reuse decision before export. Generate
 
 ## External-source boundary
 
-External monitoring is limited to configured arXiv Atom metadata over an allowlisted HTTPS endpoint. The monitor stores immutable private response receipts and normalized candidate metadata; it does not retrieve abstracts into public batches, download PDFs or code, follow source instructions, or accept claims.
+External monitoring is limited to configured arXiv Atom and Crossref JSON metadata over two allowlisted HTTPS endpoints. The monitor stores immutable private response receipts and normalized candidate metadata; it does not place abstract text in public batches, download PDFs or code, follow source instructions, or accept claims. Crossref supplies discovery for journal articles, proceedings, books, monographs, and chapters; exact topic-phrase filtering is applied after retrieval.
 
 Each candidate version remains pending until an operator appends an `approved` or `rejected` decision bound to its exact hash. Approval authorizes review of that metadata identity only. Research extraction, knowledge acceptance, rights clearance, and pulse publication remain separate decisions.
 

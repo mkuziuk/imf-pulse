@@ -22,7 +22,7 @@ Classify the change before proposing any knowledge update.
 4. Compare each substantive change with the existing knowledge base.
 5. Record support, contradiction, extension, reproduction failure, or different-target relationships rather than overwriting an accepted record.
 6. Prefer the direct primary artifact over a secondary summary when they conflict. Preserve both and describe the disagreement.
-7. Assess whether the change is genuinely material to a daily pulse. A changed hash, rewritten prose, or additional figure is not sufficient by itself.
+7. Assess whether the change is genuinely material to a literature-first daily pulse. A changed hash, rewritten prose, or additional figure is not sufficient by itself. Prefer local changes that reproduce, contradict, test, or clarify reviewed external work.
 
 ## Output
 

@@ -31,19 +31,19 @@ The Residual remains a file-based local MVP. It has no application server, datab
 
 ## Phase 4 — bounded external metadata monitoring
 
-- `config/external-sources.yaml` fixes the arXiv Atom HTTPS endpoint, allowed host, query vocabulary, date windows, result limits, response size, timeout, and receipt/review paths.
-- `research_pipeline/external.py` parses XML with DTD/entity rejection, normalizes versioned arXiv metadata, writes immutable private Atom receipts and hash-bound candidate batches, and never exposes a full-text download or code-execution path.
+- `config/external-sources.yaml` fixes reviewed arXiv and Crossref HTTPS endpoints, allowed hosts, query vocabulary, publication types, century-scale historical discovery windows, result limits, response size, timeout, and receipt/review paths.
+- `research_pipeline/external.py` parses arXiv XML with DTD/entity rejection and strict Crossref JSON, normalizes provider identities, writes immutable private receipts and hash-bound candidate batches, and never exposes a full-text download or code-execution path.
 - `scripts/search_external_sources.py --as-of ...` performs deterministic discovery. New candidates are pending, never accepted evidence.
 - `scripts/review_external_source.py` appends one explicit `approved` or `rejected` decision bound to the batch, candidate ID, candidate SHA-256, reviewer, timestamp, rationale, and rights record. Existing decisions cannot be replaced.
 - `scripts/compare_knowledge.py` compares manually prepared controlled profiles. It reports different definitions, different targets, exact-scope contradictions, and missing/scope review gaps; every finding still requires review.
 - `schemas/external-{candidate,batch,decision}.schema.json` and `schemas/comparison-finding.schema.json` define these records.
 
-External approval does not download a paper, extract claims, edit curated knowledge, or publish a pulse. Those remain explicit review steps.
+Published papers, scholarly books, and chapters precede preprints and local research in the review queue. External approval does not download a work, extract claims, edit curated knowledge, or publish a pulse. Those remain explicit review steps.
 
 ## Phase 5 — one local daily transaction and scheduling contract
 
 - `research_pipeline/daily.py` and `scripts/run_daily_pipeline.py` provide the single `--mode live --date YYYY-MM-DD` transaction.
-- Preflight requires the reviewed source, external, report, extraction, and scheduling policies. The command acquires a non-blocking local lock, reads the checkpoint, syncs allowlisted local bytes, monitors metadata, builds a candidate release, performs novelty analysis, requires exact review objects, and invokes the existing atomic publisher.
+- Preflight requires the reviewed source, external, report, extraction, and scheduling policies. The command acquires a non-blocking local lock, reads the checkpoint, monitors literature first, and stops for external review before copying local bytes. When no literature decision is pending, it syncs allowlisted local context, builds a candidate release, performs novelty analysis, requires exact review objects, and invokes the existing atomic publisher.
 - The stable result contract is `published`, `no_update`, `review_required`, `blocked`, or `failed`, with run/release identity, checkpoint effects, evidence IDs, and pending-review path.
 - Pending external candidates stop the run at `review_required`. A selected local development without its exact reviewed pulse proposal also stops at `review_required`. No-update runs create no report.
 - The Codex desktop scheduled task runs independently at 08:00 `Europe/Moscow` in local mode and invokes `scripts/run_scheduled_pipeline.py` once.

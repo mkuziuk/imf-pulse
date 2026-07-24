@@ -284,6 +284,24 @@ def _default_load_context(project_root: Path, mode: str, run_date: str) -> Daily
     product = pulse.get("product")
     if not isinstance(product, Mapping) or product.get("timezone") != "Europe/Moscow":
         raise DailyBlockedError("the product timezone must be Europe/Moscow")
+    editorial = pulse.get("editorial_focus")
+    if not isinstance(editorial, Mapping) or (
+        editorial.get("primary") != "external_literature"
+        or editorial.get("local_research_role") != "supporting_context"
+        or editorial.get("priority_order")
+        != [
+            "published_primary_paper",
+            "scholarly_book",
+            "book_chapter",
+            "preprint",
+            "local_research",
+        ]
+        or editorial.get("metadata_is_evidence") is not False
+        or editorial.get("require_exact_hash_review") is not True
+    ):
+        raise DailyBlockedError(
+            "editorial focus must prioritize reviewed external literature"
+        )
     external_enablement = pulse.get("external_monitoring")
     if not isinstance(external_enablement, Mapping) or (
         external_enablement.get("require_source_approval") is not True
@@ -956,7 +974,6 @@ def run_daily_pipeline(
         context = dependencies.load_context(project_root, mode, run_date)
         with _daily_lock(context.project_root):
             checkpoint = dependencies.read_checkpoint(context)
-            snapshot = dependencies.sync_local(context)
             external = dependencies.monitor_external(context)
             if external.pending_candidate_ids:
                 result = _result(
@@ -974,6 +991,7 @@ def run_daily_pipeline(
                 _validate_result(context.project_root, result)
                 return result
 
+            snapshot = dependencies.sync_local(context)
             candidate = dependencies.build_candidate(context, snapshot)
             analysis = dependencies.analyze_candidate(context, checkpoint, candidate)
             external_evidence = external.approved_candidate_ids

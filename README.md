@@ -1,6 +1,6 @@
 # The Residual
 
-The Residual is a local-first research-intelligence site for intrinsic multiscale filtering (IMF), robust IMF/IRMF, robust local estimation, contamination models, and related theory.
+The Residual is a literature-first, locally reproducible research-intelligence site for intrinsic multiscale filtering (IMF), robust IMF/IRMF, robust local estimation, contamination models, and related theory.
 
 [Open the public site](https://mkuziuk.github.io/imf-pulse/)
 
@@ -9,10 +9,10 @@ The MVP implements all five planned phases without introducing a crawler, applic
 - an editorial React site whose default route is the latest pulse;
 - read-only, hash-addressed ingestion of explicitly allowlisted local research;
 - deterministic change analysis, novelty ranking, and reviewed pulse proposals;
-- bounded arXiv metadata monitoring with immutable receipts and exact-hash review decisions;
+- bounded arXiv and Crossref monitoring for preprints, journal papers, proceedings, books, and chapters, with immutable receipts and exact-hash review decisions;
 - one transactional daily command plus a guarded local publisher scheduled for 08:00 `Europe/Moscow`.
 
-The system is deliberately conservative. A new source or changed hash is not automatically news. External candidates, comparison findings, knowledge changes, and pulse prose remain review-gated; nothing downloads or extracts external papers automatically.
+The system is deliberately conservative. A new source or changed hash is not automatically news. Reviewed external literature has editorial priority; local IMF changes provide supporting, reproducing, or contradicting context. External candidates, comparison findings, knowledge changes, and pulse prose remain review-gated; nothing downloads or extracts external papers automatically.
 
 ## Research and publication guarantees
 
@@ -25,7 +25,7 @@ The system is deliberately conservative. A new source or changed hash is not aut
 - No-update runs retain the last accepted report instead of fabricating a pulse.
 - Public builds read only the separately sealed and audited `public-release/` tree.
 
-The architectural rationale is in [ADR 0001](docs/adr/0001-curated-local-releases.md) and [ADR 0002](docs/adr/0002-guarded-scheduled-publication.md), the implemented file map is in [docs/implementation-plan.md](docs/implementation-plan.md), and exact operator procedures are in [docs/operations.md](docs/operations.md).
+The architectural rationale is in [ADR 0001](docs/adr/0001-curated-local-releases.md), [ADR 0002](docs/adr/0002-guarded-scheduled-publication.md), and [ADR 0003](docs/adr/0003-literature-first-monitoring.md); the implemented file map is in [docs/implementation-plan.md](docs/implementation-plan.md), and exact operator procedures are in [docs/operations.md](docs/operations.md).
 
 ## Install and run
 
@@ -92,9 +92,11 @@ The exported snapshot must be selected explicitly. Its age remains visible, and 
 
 ## External monitoring
 
-Phase 4 is a narrow arXiv Atom metadata monitor configured in `config/external-sources.yaml`. It uses fixed HTTPS host, query, date-window, response-size, and result-count allowlists. Raw Atom receipts are private and immutable; candidate batches contain normalized metadata and hashes, not abstracts, PDFs, or code.
+Phase 4 is a bounded literature metadata monitor configured in `config/external-sources.yaml`. arXiv covers preprints; Crossref covers journal articles, proceedings papers, books, monographs, and chapters. Because this is a mature field, discovery spans arXiv's operating history and up to 100 years of Crossref records rather than only recent publications. Network and review volume remain bounded by fixed HTTPS hosts and paths, query vocabulary, work types, response sizes, and small result caps. Raw provider receipts are private and immutable; candidate batches contain normalized metadata and hashes, not abstract text, PDFs, or code.
 
-Discoveries require an explicit `approved` or `rejected` decision in the append-only ledger, bound to the candidate SHA-256. Unresolved exact versions remain in later review batches; resolved versions are deduplicated. Approval does not download the paper, accept a research claim, or publish a report. The deterministic comparison helper distinguishes definition drift, different targets, exact-scope contradictions, and review gaps without semantic guessing.
+Candidate ordering follows the editorial contract in `config/pulse.yaml`: published papers, books, chapters, preprints, then local research context. Crossref results must contain an exact configured topic phrase in title, venue, subject, or abstract metadata; fuzzy API ranking alone cannot admit a candidate. OpenAlex and Unpaywall are not enabled because their current APIs require user-specific keys or contact details. They can be added later through reviewed local configuration without embedding credentials.
+
+Discoveries require an explicit `approved` or `rejected` decision in the append-only ledger, bound to the candidate SHA-256. Unresolved exact records remain in later review batches; resolved records are deduplicated. Approval does not download the work, accept a research claim, or publish a report. The deterministic comparison helper distinguishes definition drift, different targets, exact-scope contradictions, and review gaps without semantic guessing.
 
 See [docs/operations.md](docs/operations.md) for the exact search, review, and comparison commands.
 

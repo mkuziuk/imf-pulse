@@ -30,11 +30,16 @@ ATOM = b"""<feed xmlns="http://www.w3.org/2005/Atom">
 
 
 def prepared_batch(project: Path) -> tuple[Path, dict]:
+    def fetcher(url: str, **_kwargs: object) -> bytes:
+        if "api.crossref.org" in url:
+            return b'{"status":"ok","message-type":"work-list","message":{"items":[]}}'
+        return ATOM
+
     result = run_external_search(
         CONFIG,
         project,
         "2026-07-23T05:00:00Z",
-        fetcher=lambda *_args, **_kwargs: ATOM,
+        fetcher=fetcher,
         sleeper=lambda _: None,
     )
     path = project / result["batch_path"]

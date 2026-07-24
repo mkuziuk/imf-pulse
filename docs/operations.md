@@ -91,7 +91,7 @@ The proposal must satisfy `schemas/pulse-proposal.schema.json`, cite its evidenc
 
 ## Phase 4 external metadata review
 
-Run the configured arXiv metadata queries at a deterministic cutoff:
+Run the configured arXiv and Crossref literature queries at a deterministic cutoff:
 
 ```bash
 .venv/bin/python scripts/search_external_sources.py \
@@ -99,7 +99,9 @@ Run the configured arXiv metadata queries at a deterministic cutoff:
   --as-of 2026-07-23T08:00:00+03:00
 ```
 
-The command writes private immutable Atom receipts beneath `tmp/external-receipts/` and a normalized batch beneath `data/external/batches/`. It does not copy abstracts into the batch or download PDFs, supplementary files, or code. A result with `candidates_pending_review` cannot become evidence automatically. An unresolved exact candidate is carried into later batches; once its exact hash has an approval or rejection, that version is deduplicated.
+The command writes private immutable Atom or JSON receipts beneath `tmp/external-receipts/` and a normalized batch beneath `data/external/batches/`. It does not copy abstracts into the batch or download PDFs, supplementary files, or code. A result with `candidates_pending_review` cannot become evidence automatically. An unresolved exact candidate is carried into later batches; once its exact hash has an approval or rejection, that record is deduplicated.
+
+The configured horizon deliberately spans arXiv's operating history and up to 100 years of Crossref metadata. Small per-query result caps still bound every run. Treat an older work as newly discovered by this project, never as newly published or intrinsically novel.
 
 Review one exact candidate version by copying its batch path, ID, and SHA-256 from the batch:
 
@@ -127,6 +129,8 @@ Compare manually prepared controlled knowledge profiles with:
   --candidates PATH/TO/CANDIDATES.jsonl
 ```
 
+Review published papers, books, and chapters before preprints; use local IMF artifacts as supporting context. Provider metadata is discovery evidence only. Approval confirms relevance and the exact metadata identity, not any scientific claim or right to redistribute the work.
+
 Profiles use explicit `concept_key`, `target_key`, `scope_keys`, `value_key`, and `definition_bindings`. The helper reports definition drift, different targets, exact-scope contradictions, and review gaps. It performs no free-text semantic inference and every finding has `review_required: true`.
 
 ## Daily transaction
@@ -141,7 +145,7 @@ DATE="$(TZ=Europe/Moscow date +%F)"
   --date "$DATE"
 ```
 
-Do not call synchronization, search, analysis, rendering, or publication piecemeal during the same scheduled run. The transaction owns the lock and checkpoint sequence.
+Do not call synchronization, search, analysis, rendering, or publication piecemeal during the same scheduled run. The transaction owns the lock and checkpoint sequence. It checks external literature before copying local IMF context; an unresolved literature candidate stops the run at `review_required`.
 
 The command emits one JSON result:
 

@@ -27,11 +27,11 @@
   ],
   "properties": {
     "schema_version": {"const": "1.0.0"},
-    "id": {"type": "string", "pattern": "^candidate-arxiv-[0-9a-f]{20}$"},
+    "id": {"type": "string", "pattern": "^candidate-(?:arxiv|crossref)-[0-9a-f]{20}$"},
     "candidate_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "provider": {"const": "arxiv"},
-    "external_id": {"type": "string", "minLength": 1, "maxLength": 100},
-    "versioned_external_id": {"type": "string", "minLength": 1, "maxLength": 110},
+    "provider": {"enum": ["arxiv", "crossref"]},
+    "external_id": {"type": "string", "minLength": 1, "maxLength": 300},
+    "versioned_external_id": {"type": "string", "minLength": 1, "maxLength": 300},
     "version": {"type": "integer", "minimum": 1},
     "title": {"type": "string", "minLength": 1, "maxLength": 2000},
     "authors": {
@@ -54,10 +54,15 @@
         {"type": "string", "pattern": "^10\\.[0-9]{4,9}/\\S+$", "maxLength": 300}
       ]
     },
-    "canonical_url": {"type": "string", "pattern": "^https://arxiv\\.org/abs/[^?#]+$"},
+    "canonical_url": {
+      "type": "string",
+      "pattern": "^https://(?:arxiv\\.org/abs/[^?#]+|doi\\.org/10\\.[^?#]+)$"
+    },
     "abstract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "source_type": {"const": "preprint"},
-    "publication_status": {"const": "preprint"},
+    "source_type": {
+      "enum": ["preprint", "published_primary_paper", "scholarly_book", "book_chapter"]
+    },
+    "publication_status": {"enum": ["preprint", "published"]},
     "rights_status": {"const": "unknown"},
     "review_status": {"const": "pending"},
     "provenance": {
