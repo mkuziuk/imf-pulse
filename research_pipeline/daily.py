@@ -42,6 +42,11 @@ from .release import (
 )
 from .snapshot import build_snapshot
 from .paths import open_directory_under_root, open_regular_file_under_root
+from .pulse_identity import (
+    MAX_PULSE_INDEX,
+    indexed_pulse_path,
+    parse_pulse_path,
+)
 from .validation import strict_json_loads, validate_records
 
 
@@ -99,6 +104,7 @@ class AnalysisOutcome:
     evidence_ids: tuple[str, ...]
     analysis: Mapping[str, Any] | None = None
     review_path: str | None = None
+    pulse_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -561,6 +567,29 @@ def _prior_proposal_fingerprints(
     return tuple(sorted(values))
 
 
+def _next_pulse_index(
+    checkpoint: Mapping[str, Any] | None, run_date: str
+) -> int:
+    """Return the first index after this date's accepted immutable history."""
+
+    if checkpoint is None:
+        return 1
+    accepted = checkpoint.get("accepted_pulses", [])
+    if not isinstance(accepted, list):
+        raise PublicationError("accepted pulse history must be a list")
+    indices = [
+        identity.index
+        for value in accepted
+        if isinstance(value, str)
+        and (identity := parse_pulse_path(value)) is not None
+        and identity.date == run_date
+    ]
+    next_index = max(indices, default=0) + 1
+    if next_index > MAX_PULSE_INDEX:
+        raise PublicationError("the daily pulse index limit has been reached")
+    return next_index
+
+
 def _read_regular_bytes_at(directory_descriptor: int, name: str) -> bytes:
     if not name or "/" in name or name in {".", ".."}:
         raise PublicationError("unsafe immutable output name")
@@ -729,13 +758,17 @@ def _default_analyze_candidate(
             review_path=analysis_relative,
         )
     if status == "selected":
-        proposal_relative = f"data/review/pulse-proposals/{context.date}.json"
+        pulse_index = _next_pulse_index(checkpoint, context.date)
+        proposal_relative = (
+            f"data/review/pulse-proposals/{context.date}-{pulse_index}.json"
+        )
         return AnalysisOutcome(
             status=status,
             reason=reason or "material evidence-backed changes were selected",
             evidence_ids=evidence_ids,
             analysis=analysis,
             review_path=proposal_relative,
+            pulse_index=pulse_index,
         )
     return AnalysisOutcome(
         status="no_update",
@@ -785,6 +818,7 @@ def _default_load_proposal(
     checks = {
         "status": proposal.get("status") == "selected",
         "date": proposal.get("date") == context.date,
+        "pulse index": proposal.get("pulse_index") == analysis_outcome.pulse_index,
         "release": proposal.get("candidate_release_id") == candidate.release_id,
         "analysis id": proposal.get("analysis_id") == analysis.get("id"),
         "analysis fingerprint": proposal.get("analysis_fingerprint")
@@ -805,7 +839,10 @@ def _default_build_pulse(
 ) -> PulseOutcome:
     from .pulse_builder import render_pulse_markdown
 
-    output_relative = f"content/pulses/{context.date}.md"
+    pulse_index = proposal.get("pulse_index")
+    if not isinstance(pulse_index, int) or isinstance(pulse_index, bool):
+        raise PublicationError("selected proposal has no valid pulse index")
+    output_relative = indexed_pulse_path(context.date, pulse_index)
     output_path = context.project_root / output_relative
     proposal_schema = context.project_root / "schemas" / "pulse-proposal.schema.json"
     expected = render_pulse_markdown(proposal, schema_path=proposal_schema)
@@ -907,8 +944,8 @@ def _dedupe(values: Iterable[str]) -> tuple[str, ...]:
 
 
 def _validate_pulse_outcome(context: DailyContext, pulse: PulseOutcome) -> None:
-    expected_path = f"content/pulses/{context.date}.md"
-    if pulse.path != expected_path:
+    identity = parse_pulse_path(pulse.path)
+    if identity is None or identity.date != context.date:
         raise PublicationError("pulse output path does not match the run date")
     if not pulse.artifact_manifest_urls:
         raise PublicationError("a pulse must bind at least one artifact manifest")
@@ -1000,6 +1037,7 @@ def run_daily_pipeline(
         context = dependencies.load_context(project_root, mode, run_date)
         with _daily_lock(context.project_root):
             checkpoint = dependencies.read_checkpoint(context)
+            next_pulse_index = _next_pulse_index(checkpoint, context.date)
             external = dependencies.monitor_external(context)
             if using_default_dependencies:
                 from .automatic import load_and_materialize_automatic_package
@@ -1022,6 +1060,7 @@ def run_daily_pipeline(
                 proposal = (
                     automatic.proposal(
                         run_date=context.date,
+                        pulse_index=next_pulse_index,
                         release_id=candidate.release_id,
                         analysis=analysis.analysis,
                         schema_path=(

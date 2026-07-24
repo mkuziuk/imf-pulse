@@ -27,6 +27,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from research_pipeline.artifacts import verify_bound_publication
 from research_pipeline.hashing import canonical_json_hash
+from research_pipeline.pulse_identity import parse_pulse_path
 from research_pipeline.release import (
     _accepted_publications,
     _publication_history_record,
@@ -51,8 +52,12 @@ TEXT_SUFFIXES = {".json", ".jsonl", ".md", ".csv", ".svg", ".txt", ".yaml", ".ym
 ARTIFACT_SUFFIXES = {".json", ".csv", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".pdf"}
 SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
 RELEASE_ID_RE = re.compile(r"^release-[a-f0-9]{20}$")
-PULSE_RE = re.compile(r"^content/pulses/(\d{4}-\d{2}-\d{2})\.md$")
-PUBLIC_PULSE_RE = re.compile(r"^pulses/(\d{4}-\d{2}-\d{2})\.md$")
+PULSE_RE = re.compile(
+    r"^content/pulses/(\d{4}-\d{2}-\d{2}(?:-[1-9][0-9]{0,3})?)\.md$"
+)
+PUBLIC_PULSE_RE = re.compile(
+    r"^pulses/(\d{4}-\d{2}-\d{2}(?:-[1-9][0-9]{0,3})?)\.md$"
+)
 PUBLIC_ARTIFACT_RE = re.compile(
     r"^artifacts/\d{4}-\d{2}-\d{2}/[a-zA-Z0-9._-]+(?:/[a-zA-Z0-9._-]+)*$"
 )
@@ -532,18 +537,26 @@ def _publication_payloads(
     project_root: Path, accepted: list[dict[str, Any]]
 ) -> dict[str, bytes]:
     payloads: dict[str, bytes] = {}
+    next_index_by_date: dict[str, int] = {}
     for publication in accepted:
         pulse = publication.get("pulse")
         match = PULSE_RE.fullmatch(str(pulse))
         if not match:
             raise PublicReleaseError(f"accepted pulse path is unsafe: {pulse}")
+        identity = parse_pulse_path(str(pulse))
+        expected_index = next_index_by_date.get(identity.date, 1) if identity else 1
+        if identity is None or identity.index != expected_index:
+            raise PublicReleaseError(
+                "accepted pulse history contains a non-sequential date/index"
+            )
+        next_index_by_date[identity.date] = expected_index + 1
         pulse_payload = _read_project_bound_file(
             project_root, publication["bound_pulse"], publication["pulse_sha256"]
         )
         public_pulse = f"pulses/{match.group(1)}.md"
         previous = payloads.get(public_pulse)
         if previous is not None and previous != pulse_payload:
-            raise PublicReleaseError(f"two accepted pulses claim the same date: {public_pulse}")
+            raise PublicReleaseError(f"two accepted pulses claim the same index: {public_pulse}")
         payloads[public_pulse] = pulse_payload
 
         for manifest_record in publication.get("artifact_manifests", []):
@@ -692,6 +705,15 @@ def audit_public_release(directory: Path) -> dict[str, Any]:
     manifests = current.get("accepted_artifact_manifests")
     if not isinstance(pulses, list) or not pulses or not isinstance(manifests, list):
         raise PublicReleaseError("public current summary has invalid accepted content")
+    next_index_by_date: dict[str, int] = {}
+    for value in pulses:
+        identity = parse_pulse_path(value) if isinstance(value, str) else None
+        expected_index = next_index_by_date.get(identity.date, 1) if identity else 1
+        if identity is None or identity.index != expected_index:
+            raise PublicReleaseError(
+                "public current pulse history contains a non-sequential date/index"
+            )
+        next_index_by_date[identity.date] = expected_index + 1
     expected_pulse_files = {
         f"pulses/{match.group(1)}.md"
         for value in pulses

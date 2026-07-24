@@ -27,6 +27,7 @@ The Residual remains a file-based local MVP. It has no application server, datab
 - `schemas/change-analysis.schema.json` and `schemas/pulse-proposal.schema.json` define the review objects.
 - `research_pipeline/pulse_builder.py` validates a reviewed proposal bound to the exact analysis/release and renders one immutable 350–650 word Markdown pulse with exactly one artifact. It refuses overwrite.
 - `scripts/build_daily_pulse.py` writes deterministic analysis and can render an already reviewed proposal. It does not generate, approve, or publish prose by itself.
+- Pulse identity is the pair `(Europe/Moscow date, positive index)`. Legacy date-only pulses remain index `1`; new immutable reports use `YYYY-MM-DD-N.md`, allowing multiple separately reviewed releases on one date without overwriting accepted bytes.
 - `prompts/` contains active but review-only extraction, change-analysis, and pulse-drafting contracts. Prompt output cannot mutate accepted knowledge or checkpoints.
 
 ## Phase 4 — bounded external metadata monitoring

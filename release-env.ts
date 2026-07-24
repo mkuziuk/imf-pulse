@@ -417,8 +417,8 @@ export function validateAcceptedPublications(
       throw new Error("Accepted publication has an unsafe release id.");
     }
     const pulse = safeRelativePath(row.pulse, "accepted publication pulse");
-    if (!/^content\/pulses\/\d{4}-\d{2}-\d{2}\.md$/.test(pulse)) {
-      throw new Error("Accepted publication pulse is not a dated content/pulses file.");
+    if (!/^content\/pulses\/\d{4}-\d{2}-\d{2}(?:-[1-9]\d{0,3})?\.md$/.test(pulse)) {
+      throw new Error("Accepted publication pulse is not a dated, optionally indexed content/pulses file.");
     }
     const boundPulse = safeBoundFile(
       projectRoot,
@@ -542,8 +542,8 @@ export function getCandidateReleaseContext(
   const selectedPulse = selectedValue
     ? safeRelativePath(selectedValue, "IMF_PULSE_SELECTED_PULSE")
     : undefined;
-  if (selectedPulse && !/^content\/pulses\/\d{4}-\d{2}-\d{2}\.md$/.test(selectedPulse)) {
-    throw new Error("IMF_PULSE_SELECTED_PULSE must name a dated content/pulses Markdown file.");
+  if (selectedPulse && !/^content\/pulses\/\d{4}-\d{2}-\d{2}(?:-[1-9]\d{0,3})?\.md$/.test(selectedPulse)) {
+    throw new Error("IMF_PULSE_SELECTED_PULSE must name a dated, optionally indexed content/pulses Markdown file.");
   }
   const artifactManifests = [
     ...new Set(

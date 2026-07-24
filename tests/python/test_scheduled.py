@@ -18,6 +18,7 @@ from research_pipeline.scheduled import (
 
 
 RUN_DATE = "2026-07-23"
+INDEXED_PULSE = f"content/pulses/{RUN_DATE}-2.md"
 
 
 def _daily(status: str, **updates: object) -> dict[str, object]:
@@ -43,6 +44,7 @@ def _daily(status: str, **updates: object) -> dict[str, object]:
 def test_allowlist_is_date_scoped_and_exact() -> None:
     allowed = [
         f"content/pulses/{RUN_DATE}.md",
+        INDEXED_PULSE,
         f"public/artifacts/{RUN_DATE}/chart/chart.svg",
         "knowledge/curated/claims.jsonl",
         "knowledge/curated/sources.jsonl",
@@ -50,6 +52,7 @@ def test_allowlist_is_date_scoped_and_exact() -> None:
         "public-release/manifest.json",
         "public-release/knowledge/sources.jsonl",
         f"public-release/pulses/{RUN_DATE}.md",
+        f"public-release/pulses/{RUN_DATE}-2.md",
         f"public-release/artifacts/{RUN_DATE}/chart/chart.csv",
     ]
     assert all(_allowed_change(path, RUN_DATE) for path in allowed)
@@ -60,16 +63,16 @@ def test_allowlist_is_date_scoped_and_exact() -> None:
 
 def test_publish_change_validation_rejects_unsafe_or_incomplete_sets() -> None:
     valid = [
-        ("?", f"content/pulses/{RUN_DATE}.md"),
+        ("?", INDEXED_PULSE),
         ("M", "public-release/manifest.json"),
     ]
-    assert _validate_publish_changes(valid, RUN_DATE)
+    assert _validate_publish_changes(valid, RUN_DATE, INDEXED_PULSE)
     with pytest.raises(ScheduledPublishError, match="status D"):
-        _validate_publish_changes([("D", valid[0][1]), valid[1]], RUN_DATE)
+        _validate_publish_changes([("D", valid[0][1]), valid[1]], RUN_DATE, INDEXED_PULSE)
     with pytest.raises(ScheduledPublishError, match="refuses changed path"):
-        _validate_publish_changes([*valid, ("M", "README.md")], RUN_DATE)
+        _validate_publish_changes([*valid, ("M", "README.md")], RUN_DATE, INDEXED_PULSE)
     with pytest.raises(ScheduledPublishError, match="manifest"):
-        _validate_publish_changes([valid[0]], RUN_DATE)
+        _validate_publish_changes([valid[0]], RUN_DATE, INDEXED_PULSE)
 
 
 def test_remote_match_is_exact() -> None:
@@ -130,8 +133,9 @@ class FakeRunner:
         elif command[0].endswith("/.venv/bin/python") and command[1] == (
             "scripts/export_public_release.py"
         ):
+            pulse_path = str(self.daily.get("pulse_path") or f"content/pulses/{RUN_DATE}.md")
             (self.project / "content" / "pulses").mkdir(parents=True, exist_ok=True)
-            (self.project / "content" / "pulses" / f"{RUN_DATE}.md").write_text("pulse\n")
+            (self.project / pulse_path).write_text("pulse\n")
             (self.project / "public-release").mkdir(exist_ok=True)
             (self.project / "public-release" / "manifest.json").write_text("{}\n")
         elif command[0].endswith("/.venv/bin/python") and command[1] == (
@@ -139,8 +143,9 @@ class FakeRunner:
         ):
             output = ""
         elif command[:4] == ("git", "diff", "--name-status", "--no-renames"):
+            pulse_path = str(self.daily.get("pulse_path") or f"content/pulses/{RUN_DATE}.md")
             output = (
-                f"A\tcontent/pulses/{RUN_DATE}.md\n"
+                f"A\t{pulse_path}\n"
                 "M\tpublic-release/manifest.json\n"
             )
         elif command[:3] == ("git", "ls-files", "--others"):
@@ -148,8 +153,9 @@ class FakeRunner:
         elif command[:3] == ("git", "diff", "--quiet"):
             return subprocess.CompletedProcess(command, 0, "", "")
         elif command[:4] == ("git", "diff", "--cached", "--name-status"):
+            pulse_path = str(self.daily.get("pulse_path") or f"content/pulses/{RUN_DATE}.md")
             output = (
-                f"A\tcontent/pulses/{RUN_DATE}.md\n"
+                f"A\t{pulse_path}\n"
                 "M\tpublic-release/manifest.json\n"
             )
         elif command[:3] == ("git", "commit", "-m"):
@@ -214,7 +220,7 @@ def test_published_result_uses_guarded_commit_and_waits_for_pages(
     project = _scheduled_project(tmp_path, repository_root)
     daily = _daily(
         "published",
-        pulse_path=f"content/pulses/{RUN_DATE}.md",
+        pulse_path=INDEXED_PULSE,
         artifact_urls=[f"/artifacts/{RUN_DATE}/chart/manifest.json"],
         release_advanced=True,
         checkpoint_refreshed=True,

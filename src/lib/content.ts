@@ -9,6 +9,7 @@ import {
 export interface PulseDocument {
   id: string;
   date: string;
+  pulseIndex: number;
   title: string;
   lead: string;
   status: "published" | "draft" | "preview";
@@ -95,6 +96,8 @@ function normalizeFrontmatter(value: unknown): Record<string, unknown> {
     schema_version: raw.schema_version ?? raw.schemaVersion,
     id: stringValue(raw.id ?? raw.pulse_id),
     date: stringValue(raw.date ?? raw.published_at),
+    pulse_index:
+      typeof raw.pulse_index === "number" ? raw.pulse_index : raw.pulseIndex,
     title: stringValue(raw.title),
     lead: stringValue(raw.lead ?? raw.summary ?? raw.dek),
     status: stringValue(raw.status) ?? "published",
@@ -105,8 +108,20 @@ function normalizeFrontmatter(value: unknown): Record<string, unknown> {
   };
 }
 
-function filenameDate(path: string): string | undefined {
-  return path.match(/(\d{4}-\d{2}-\d{2})\.md$/)?.[1];
+interface FilenameIdentity {
+  date: string;
+  pulseIndex: number;
+  legacy: boolean;
+}
+
+function filenameIdentity(path: string): FilenameIdentity | undefined {
+  const match = path.match(/(\d{4}-\d{2}-\d{2})(?:-([1-9]\d{0,3}))?\.md$/);
+  if (!match) return undefined;
+  return {
+    date: match[1],
+    pulseIndex: match[2] ? Number(match[2]) : 1,
+    legacy: match[2] == null
+  };
 }
 
 function firstHeading(body: string): string | undefined {
@@ -150,18 +165,26 @@ export function parsePulseMarkdown(raw: string, sourcePath: string): PulseDocume
     issues.push(...parsed.error.issues.map((issue) => issue.message));
   }
 
-  const dateFromFile = filenameDate(sourcePath);
+  const fileIdentity = filenameIdentity(sourcePath);
   const title = metadata.title ?? firstHeading(parts.body) ?? "Untitled pulse";
-  const date = metadata.date?.slice(0, 10) ?? dateFromFile ?? "undated";
+  const date = metadata.date?.slice(0, 10) ?? fileIdentity?.date ?? "undated";
+  const pulseIndex = metadata.pulse_index ?? fileIdentity?.pulseIndex ?? 1;
   const body = stripFirstHeading(parts.body, title);
 
-  if (metadata.date && dateFromFile && metadata.date.slice(0, 10) !== dateFromFile) {
+  if (metadata.date && fileIdentity && metadata.date.slice(0, 10) !== fileIdentity.date) {
     issues.push("Pulse date does not match its filename.");
   }
+  if (metadata.pulse_index != null && fileIdentity && metadata.pulse_index !== fileIdentity.pulseIndex) {
+    issues.push("Pulse index does not match its filename.");
+  }
+  const fallbackId = fileIdentity?.legacy
+    ? `pulse-${date}`
+    : `pulse-${date}-${pulseIndex}`;
 
   return {
-    id: metadata.id ?? `pulse-${date}`,
+    id: metadata.id ?? fallbackId,
     date,
+    pulseIndex,
     title,
     lead: metadata.lead ?? firstParagraph(body) ?? "No lead was supplied for this pulse.",
     status: issues.length > 0 ? "preview" : metadata.status,
@@ -177,11 +200,11 @@ export function parsePulseMarkdown(raw: string, sourcePath: string): PulseDocume
 }
 
 function comparePulseDates(a: PulseDocument, b: PulseDocument): number {
-  return b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
+  return b.date.localeCompare(a.date) || b.pulseIndex - a.pulseIndex || a.id.localeCompare(b.id);
 }
 
 export function getPulseDocuments(): PulseDocument[] {
-  const seenDates = new Set<string>();
+  const seenIndices = new Set<string>();
   const seenIds = new Set<string>();
 
   return Object.entries(pulseModules)
@@ -189,9 +212,12 @@ export function getPulseDocuments(): PulseDocument[] {
     .sort(comparePulseDates)
     .map((pulse) => {
       const issues = [...pulse.issues];
-      if (seenDates.has(pulse.date)) issues.push(`Duplicate pulse date: ${pulse.date}.`);
+      const indexedDate = `${pulse.date}:${pulse.pulseIndex}`;
+      if (seenIndices.has(indexedDate)) {
+        issues.push(`Duplicate pulse index: ${pulse.date} #${pulse.pulseIndex}.`);
+      }
       if (seenIds.has(pulse.id)) issues.push(`Duplicate pulse id: ${pulse.id}.`);
-      seenDates.add(pulse.date);
+      seenIndices.add(indexedDate);
       seenIds.add(pulse.id);
       return issues.length === pulse.issues.length
         ? pulse
@@ -217,8 +243,8 @@ export function findPulseByReference(
       pulse.id === normalizedReference ||
       pulse.sourcePath.replace(/^\//, "") === normalizedReference ||
       pulse.sourcePath.endsWith(`/${normalizedReference}`) ||
-      pulse.date === normalizedReference ||
-      pulse.date === normalizedReference.match(/(\d{4}-\d{2}-\d{2})/)?.[1]
+      `${pulse.date}/${pulse.pulseIndex}` === normalizedReference ||
+      pulse.date === normalizedReference
   );
 }
 
@@ -276,7 +302,12 @@ export function getPulseCatalog(current?: CurrentRelease): PulseCatalog {
   return selectPulseCatalog(getPulseDocuments(), current);
 }
 
-export function getPulseByDate(date: string | undefined): PulseDocument | undefined {
+export function getPulseByDate(
+  date: string | undefined,
+  pulseIndex?: number
+): PulseDocument | undefined {
   if (!date) return undefined;
-  return getPulseDocuments().find((pulse) => pulse.date === date);
+  return getPulseDocuments().find(
+    (pulse) => pulse.date === date && (pulseIndex == null || pulse.pulseIndex === pulseIndex)
+  );
 }

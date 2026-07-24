@@ -14,6 +14,7 @@ describe("artifact normalization", () => {
   const report = {
     id: "pulse-1",
     date: "2026-07-22",
+    pulseIndex: 1,
     title: "Pulse",
     lead: "Lead",
     status: "published",

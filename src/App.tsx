@@ -77,6 +77,7 @@ export function App() {
           <Route path="/" element={<LatestPage />} />
           <Route path="/archive" element={<ArchivePage />} />
           <Route path="/archive/:date" element={<LatestPage />} />
+          <Route path="/archive/:date/:pulseIndex" element={<LatestPage />} />
           <Route path="/research-map" element={<ResearchMapPage />} />
           <Route path="/artifacts" element={<ArtifactsPage />} />
           <Route path="/sources" element={<SourcesPage />} />

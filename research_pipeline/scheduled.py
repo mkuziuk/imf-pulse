@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping, Sequence
 
 from .config import load_yaml
+from .pulse_identity import parse_pulse_path
 from .validation import validate_records
 
 
@@ -217,15 +218,20 @@ def _git_preflight(
     return head
 
 
-def _allowed_change(path: str, run_date: str) -> bool:
+def _allowed_change(
+    path: str, run_date: str, expected_pulse_path: str | None = None
+) -> bool:
     try:
         pure = PurePosixPath(path)
     except ValueError:
         return False
     if pure.is_absolute() or any(part in {"", ".", ".."} for part in pure.parts):
         return False
-    if path == f"content/pulses/{run_date}.md":
-        return True
+    content_identity = parse_pulse_path(path)
+    if content_identity is not None:
+        return content_identity.date == run_date and (
+            expected_pulse_path is None or path == expected_pulse_path
+        )
     artifact_prefix = f"public/artifacts/{run_date}/"
     if path.startswith(artifact_prefix):
         return bool(SAFE_ARTIFACT_RE.fullmatch(path.removeprefix(artifact_prefix)))
@@ -237,8 +243,18 @@ def _allowed_change(path: str, run_date: str) -> bool:
     knowledge_prefix = "public-release/knowledge/"
     if path.startswith(knowledge_prefix):
         return path.removeprefix(knowledge_prefix) in PUBLIC_KNOWLEDGE
-    if path == f"public-release/pulses/{run_date}.md":
-        return True
+    public_identity = parse_pulse_path(path, directory="public-release/pulses")
+    if public_identity is not None:
+        expected_public = (
+            expected_pulse_path.replace(
+                "content/pulses/", "public-release/pulses/", 1
+            )
+            if expected_pulse_path is not None
+            else None
+        )
+        return public_identity.date == run_date and (
+            expected_public is None or path == expected_public
+        )
     public_artifact_prefix = f"public-release/artifacts/{run_date}/"
     if path.startswith(public_artifact_prefix):
         return bool(
@@ -275,18 +291,27 @@ def _changed_paths(runner: CommandRunner, project_root: Path) -> list[tuple[str,
     return [*tracked, *(("?", path) for path in untracked if path)]
 
 
-def _validate_publish_changes(changes: Sequence[tuple[str, str]], run_date: str) -> list[str]:
+def _validate_publish_changes(
+    changes: Sequence[tuple[str, str]],
+    run_date: str,
+    expected_pulse_path: str | None = None,
+) -> list[str]:
     if not changes:
         raise ScheduledPublishError("a published pulse produced no public Git changes")
     paths: list[str] = []
     for status, path in changes:
         if status not in {"A", "M", "?"}:
             raise ScheduledPublishError(f"scheduled publication refuses Git status {status}")
-        if not _allowed_change(path, run_date):
+        if not _allowed_change(path, run_date, expected_pulse_path):
             raise ScheduledPublishError(f"scheduled publication refuses changed path: {path}")
         if path not in paths:
             paths.append(path)
-    if f"content/pulses/{run_date}.md" not in paths:
+    pulse_paths = [path for path in paths if parse_pulse_path(path) is not None]
+    if expected_pulse_path is not None:
+        pulse_is_present = pulse_paths == [expected_pulse_path]
+    else:
+        pulse_is_present = len(pulse_paths) == 1
+    if not pulse_is_present:
         raise ScheduledPublishError("published pulse is missing from the Git change set")
     if "public-release/manifest.json" not in paths:
         raise ScheduledPublishError("public release manifest did not change")
@@ -452,9 +477,12 @@ def run_scheduled_pipeline(
                 deployment_status="not_requested",
             )
 
-        if (
-            daily.get("release_advanced") is not True
-            or daily.get("pulse_path") != f"content/pulses/{run_date}.md"
+        pulse_path = daily.get("pulse_path")
+        pulse_identity = (
+            parse_pulse_path(pulse_path) if isinstance(pulse_path, str) else None
+        )
+        if daily.get("release_advanced") is not True or (
+            pulse_identity is None or pulse_identity.date != run_date
         ):
             raise ScheduledPublishError("published daily result is not safe to deploy")
 
@@ -484,7 +512,7 @@ def run_scheduled_pipeline(
         if current_head != base_head:
             raise ScheduledPublishError("HEAD changed during the daily transaction")
         paths = _validate_publish_changes(
-            _changed_paths(runner, project_root), run_date
+            _changed_paths(runner, project_root), run_date, pulse_path
         )
         _validate_publish_files(project_root, paths)
         _run(runner, project_root, ("git", "add", "--", *paths))
@@ -496,12 +524,17 @@ def run_scheduled_pipeline(
                 ("git", "diff", "--cached", "--name-status", "--no-renames"),
             ).stdout
         )
-        _validate_publish_changes(staged, run_date)
+        _validate_publish_changes(staged, run_date, pulse_path)
         _run(runner, project_root, ("git", "diff", "--cached", "--check"))
         _run(
             runner,
             project_root,
-            ("git", "commit", "-m", f"Publish pulse {run_date}"),
+            (
+                "git",
+                "commit",
+                "-m",
+                f"Publish pulse {PurePosixPath(pulse_path).stem}",
+            ),
             timeout=300,
         )
         commit_sha = _run(runner, project_root, ("git", "rev-parse", "HEAD")).stdout.strip()

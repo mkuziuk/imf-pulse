@@ -8,6 +8,7 @@
     "id",
     "status",
     "date",
+    "pulse_index",
     "candidate_release_id",
     "analysis_id",
     "analysis_fingerprint",
@@ -23,6 +24,7 @@
       "enum": ["no_update", "review_required", "selected"]
     },
     "date": {"$ref": "common.schema.json#/$defs/calendarDate"},
+    "pulse_index": {"type": "integer", "minimum": 1, "maximum": 9999},
     "candidate_release_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "analysis_id": {"$ref": "common.schema.json#/$defs/identifier"},
     "analysis_fingerprint": {"$ref": "common.schema.json#/$defs/sha256"},

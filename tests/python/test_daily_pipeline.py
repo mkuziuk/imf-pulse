@@ -290,7 +290,7 @@ def test_reviewed_material_change_publishes_exactly_one_pulse_and_artifact(
     )
     proposal = {"status": "selected"}
     pulse = PulseOutcome(
-        f"content/pulses/{RUN_DATE}.md",
+        f"content/pulses/{RUN_DATE}-2.md",
         (
             f"/artifacts/{RUN_DATE}/new-signal/manifest.json",
             f"/artifacts/{RUN_DATE}/topic-illustration/manifest.json",
@@ -299,7 +299,10 @@ def test_reviewed_material_change_publishes_exactly_one_pulse_and_artifact(
     )
     dependencies, calls = _dependencies(
         project,
-        checkpoint={"release_id": OLD_RELEASE},
+        checkpoint={
+            "release_id": OLD_RELEASE,
+            "accepted_pulses": [f"content/pulses/{RUN_DATE}.md"],
+        },
         candidate=candidate,
         analysis=analysis,
         proposal=proposal,
@@ -314,7 +317,7 @@ def test_reviewed_material_change_publishes_exactly_one_pulse_and_artifact(
     assert result.status == "published"
     assert result.run_id == "run-test-published"
     assert result.release_id == NEW_RELEASE
-    assert result.pulse_path == f"content/pulses/{RUN_DATE}.md"
+    assert result.pulse_path == f"content/pulses/{RUN_DATE}-2.md"
     assert result.artifact_urls == (
         f"/artifacts/{RUN_DATE}/new-signal/manifest.json",
         f"/artifacts/{RUN_DATE}/topic-illustration/manifest.json",

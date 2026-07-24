@@ -77,9 +77,9 @@ export function ArchivePage() {
               <time dateTime={pulse.date}>{formatDate(pulse.date)}</time>
               <div>
                 <h2>
-                  <Link to={`/archive/${pulse.date}`}>{pulse.title}</Link>
+                  <Link to={`/archive/${pulse.date}/${pulse.pulseIndex}`}>{pulse.title}</Link>
                 </h2>
-                <p>{pulse.lead}</p>
+                <p>Pulse {pulse.pulseIndex} · {pulse.lead}</p>
               </div>
               <span className="archive-ledger__status">
                 {catalog.mode === "preview" ? "preview" : pulse.status}

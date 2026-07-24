@@ -46,9 +46,13 @@ The ingest result prints a candidate `release_id`. To publish a prepared, review
 ```bash
 .venv/bin/python scripts/publish_pulse.py \
   --release-id RELEASE_ID \
-  --pulse content/pulses/YYYY-MM-DD.md \
+  --pulse content/pulses/YYYY-MM-DD-N.md \
   --artifact-manifest public/artifacts/YYYY-MM-DD/ARTIFACT_ID/manifest.json
 ```
+
+`N` is the positive, one-based pulse index for that calendar date. Existing
+accepted date-only files are immutable and are interpreted as index `1`; new
+pulses always carry `pulse_index` in front matter and use the indexed filename.
 
 To record a verified no-update check for the already current release, omit `--pulse` and `--artifact-manifest`. Publication still runs every gate. `data/current.json` is replaced only after success; a failed gate preserves the previous accepted checkpoint.
 
@@ -83,11 +87,11 @@ The command never writes narrative by itself. After an operator creates and revi
   --current-release data/releases/release-CURRENT \
   --candidate-release data/releases/release-CANDIDATE \
   --analysis-output data/review/change-analyses/ANALYSIS.json \
-  --proposal data/review/pulse-proposals/YYYY-MM-DD.json \
-  --output content/pulses/YYYY-MM-DD.md
+  --proposal data/review/pulse-proposals/YYYY-MM-DD-N.json \
+  --output content/pulses/YYYY-MM-DD-N.md
 ```
 
-The proposal must satisfy `schemas/pulse-proposal.schema.json`, cite its evidence, contain at most three signals, select exactly one approved artifact, and render to 350–650 words. An existing pulse is immutable and will not be overwritten. Rendering does not advance a release.
+The proposal must satisfy `schemas/pulse-proposal.schema.json`, declare the same positive `pulse_index` as `N`, cite its evidence, contain at most three signals, select exactly one approved artifact, and render to 350–650 words. An existing pulse is immutable and will not be overwritten. Rendering does not advance a release.
 
 ## Phase 4 external metadata review
 
@@ -171,7 +175,7 @@ The command emits one JSON result:
 
 Exit status is zero for `published`, `no_update`, and `review_required`; it is nonzero for `blocked` and `failed`. Use the JSON fields `release_advanced` and `checkpoint_refreshed` rather than inferring state from a source hash or timestamp.
 
-An automatic package is single-use staging. Once its dated pulse appears in the sealed accepted-publication history, same-day reruns ignore the leftover private package and cannot publish a second pulse for that date. An unconsumed package always remains subject to the current fail-closed schema and evidence checks.
+An automatic package is single-use staging. Once its indexed pulse appears in the sealed accepted-publication history, same-day reruns ignore the leftover private package and cannot publish that automatic package again. A separately reviewed proposal with the next index may publish another pulse on the same date when it is bound to a new evidence release and passes every gate. An unconsumed package always remains subject to the current fail-closed schema and evidence checks.
 
 ### Scheduled task boundary
 

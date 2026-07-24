@@ -70,9 +70,13 @@ The lower-level manual sequence is:
 # 3. Publish a reviewed release candidate and its prepared pulse/artifact.
 .venv/bin/python scripts/publish_pulse.py \
   --release-id RELEASE_ID \
-  --pulse content/pulses/YYYY-MM-DD.md \
+  --pulse content/pulses/YYYY-MM-DD-N.md \
   --artifact-manifest public/artifacts/YYYY-MM-DD/ARTIFACT_ID/manifest.json
 ```
+
+`N` is a one-based pulse index, so independently reviewed releases can publish
+more than one immutable pulse on a calendar date. Legacy date-only pulses are
+retained as index `1` without rewriting their accepted bytes.
 
 Synchronization does not select a release. Ingestion never executes source code. Publication binds accepted pulse and artifact bytes, runs every gate, then replaces `data/current.json` last. On failure, the accepted pointer remains unchanged.
 

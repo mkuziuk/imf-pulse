@@ -9,11 +9,13 @@ import { CurrentReleaseSchema } from "./schemas";
 function pulse(
   id: string,
   date: string,
-  status: PulseDocument["status"] = "published"
+  status: PulseDocument["status"] = "published",
+  pulseIndex?: number
 ): PulseDocument {
   return {
     id,
     date,
+    pulseIndex: pulseIndex ?? 1,
     title: id,
     lead: `Lead for ${id}`,
     status,
@@ -21,7 +23,7 @@ function pulse(
     artifactManifests: [`/artifacts/${date}/${id}/manifest.json`],
     sourceIds: ["source-1"],
     body: "Body",
-    sourcePath: `/content/pulses/${date}.md`,
+    sourcePath: `/content/pulses/${date}${pulseIndex == null ? "" : `-${pulseIndex}`}.md`,
     issues: [],
     metadata: { status, topics: [], artifact_manifests: [], source_ids: [] }
   };
@@ -46,6 +48,26 @@ describe("release pulse selection", () => {
     expect(selectPulseCatalog([newer, selected], current)).toMatchObject({
       mode: "preview",
       pulses: [{ id: "pulse-selected" }]
+    });
+  });
+
+  it("keeps multiple pulse indices on one date and selects the latest index", () => {
+    const first = pulse("pulse-2026-07-22-1", "2026-07-22", "published", 1);
+    const second = pulse("pulse-2026-07-22-2", "2026-07-22", "published", 2);
+    const current = CurrentReleaseSchema.parse({
+      release_id: "release-indexed",
+      status: "published",
+      pulse: "content/pulses/2026-07-22-2.md",
+      latest_accepted_pulse: "content/pulses/2026-07-22-2.md",
+      accepted_pulses: [first.sourcePath.replace(/^\//, ""), second.sourcePath.replace(/^\//, "")]
+    });
+
+    expect(selectPulseCatalog([first, second], current)).toMatchObject({
+      latest: { id: "pulse-2026-07-22-2", pulseIndex: 2 },
+      pulses: [
+        { id: "pulse-2026-07-22-2" },
+        { id: "pulse-2026-07-22-1" }
+      ]
     });
   });
 

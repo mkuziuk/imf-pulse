@@ -30,6 +30,7 @@ from .errors import PublicationError, ValidationError
 from .extractors import ExtractionResult, extract_source
 from .hashing import canonical_json_bytes, canonical_json_hash, sha256_file
 from .models import PipelineConfig, SnapshotManifest, SourceConfig
+from .pulse_identity import parse_pulse_path
 from .snapshot import atomic_write_json, load_current_snapshot
 from .paths import (
     ensure_directory_under_root,
@@ -1415,6 +1416,9 @@ def _publish_release_unlocked(
                 release_manifest["publication"] = binding.metadata
         if binding.metadata is not None:
             new_publication = _publication_history_record(release_id, binding.metadata)
+            new_identity = parse_pulse_path(binding.selected_pulse or "")
+            if new_identity is None:
+                raise PublicationError("publication binding has an invalid pulse identity")
             duplicate = next(
                 (
                     item
@@ -1433,6 +1437,18 @@ def _publish_release_unlocked(
                 raise PublicationError(
                     "an accepted pulse cannot be published by a different release; "
                     "omit --pulse for an evidence-only release"
+                )
+            existing_indices = [
+                identity.index
+                for item in accepted_publications
+                if (identity := parse_pulse_path(str(item.get("pulse", ""))))
+                is not None
+                and identity.date == new_identity.date
+            ]
+            expected_index = max(existing_indices, default=0) + 1
+            if new_identity.index != expected_index:
+                raise PublicationError(
+                    f"pulse index must be the next available index {expected_index} for this date"
                 )
             _enforce_stable_artifact_history(accepted_publications, new_publication)
             accepted_publications.append(new_publication)

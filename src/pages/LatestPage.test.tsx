@@ -14,6 +14,7 @@ vi.mock("../lib/content", () => ({
     latest: {
       id: "pulse-2026-07-24",
       date: "2026-07-24",
+      pulseIndex: 1,
       title: "A visual pulse",
       lead: "A plain-language lead introduces the research object.",
       status: "published",

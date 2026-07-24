@@ -10,11 +10,15 @@ import { getKnowledgeSnapshot } from "../lib/data";
 import { formatDate } from "../lib/format";
 
 export function LatestPage() {
-  const { date } = useParams<{ date?: string }>();
+  const { date, pulseIndex } = useParams<{ date?: string; pulseIndex?: string }>();
   const knowledge = getKnowledgeSnapshot();
   const catalog = getPulseCatalog(knowledge.current);
   const pulse = date
-    ? catalog.pulses.find((candidate) => candidate.date === date)
+    ? catalog.pulses.find(
+        (candidate) =>
+          candidate.date === date &&
+          (pulseIndex == null || candidate.pulseIndex === Number(pulseIndex))
+      )
     : catalog.latest;
   const manifestUrls = useMemo(
     () =>
@@ -66,6 +70,7 @@ export function LatestPage() {
         <div className="pulse-header__meta">
           <p className="eyebrow">{date ? "Archive pulse" : "Latest pulse"}</p>
           <time dateTime={pulse.date}>{formatDate(pulse.date)}</time>
+          <span>Pulse {pulse.pulseIndex}</span>
           <StatusLabel
             label={publicationLabel}
             tone={catalog.mode === "authorized" && !candidateBuild ? "accent" : "warning"}

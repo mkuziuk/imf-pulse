@@ -20,6 +20,7 @@ from .config import load_pulse_constraints
 from .hashing import canonical_json_hash
 from .paths import open_regular_file_under_root
 from .pulse_validation import parse_pulse, validate_pulse_file
+from .pulse_identity import parse_pulse_path
 from .validation import _validate_evidence, strict_json_loads, validate_records
 
 
@@ -117,11 +118,11 @@ def bind_publication_inputs(
         return PublicationBinding(None, None, ())
     pulse = _safe_relative(pulse, "pulse path")
     pulse_parts = PurePosixPath(pulse)
-    if (
-        pulse_parts.parent.as_posix() != "content/pulses"
-        or re.fullmatch(r"\d{4}-\d{2}-\d{2}\.md", pulse_parts.name) is None
-    ):
-        raise PublicationError("selected pulse must be a dated Markdown file in content/pulses")
+    pulse_identity = parse_pulse_path(pulse)
+    if pulse_identity is None:
+        raise PublicationError(
+            "selected pulse must be a dated, optionally indexed Markdown file in content/pulses"
+        )
     source_records = {
         record["id"]: record for record in release_records.get("sources.jsonl", [])
     }
@@ -139,14 +140,15 @@ def bind_publication_inputs(
             **pulse_constraints,
         )
         frontmatter, _ = parse_pulse(private_pulse)
-    pulse_date = pulse_parts.stem
+    declared_index = frontmatter.get("pulse_index", 1)
     if (
         frontmatter.get("status") != "published"
-        or frontmatter.get("date") != pulse_date
-        or frontmatter.get("id") != f"pulse-{pulse_date}"
+        or frontmatter.get("date") != pulse_identity.date
+        or declared_index != pulse_identity.index
+        or frontmatter.get("id") != pulse_identity.pulse_id
     ):
         raise PublicationError(
-            "published pulse status, id, date, and filename must agree"
+            "published pulse status, id, date, index, and filename must agree"
         )
     required_urls = tuple(frontmatter.get("artifact_manifests", []))
     if not required_urls:

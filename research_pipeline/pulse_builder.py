@@ -8,11 +8,12 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 from .errors import ValidationError
 from .hashing import canonical_json_hash
+from .pulse_identity import indexed_pulse_id, indexed_pulse_path
 from .validation import strict_json_loads, validate_records
 
 
@@ -246,11 +247,13 @@ def render_pulse_markdown(
         raise ValidationError(
             f"rendered pulse word count {word_count} is outside 350–650"
         )
+    pulse_index = int(proposal["pulse_index"])
     lines = [
         "---",
         'schema_version: "1.0.0"',
-        f"id: pulse-{proposal['date']}",
+        f"id: {indexed_pulse_id(str(proposal['date']), pulse_index)}",
         f"date: {proposal['date']}",
+        f"pulse_index: {pulse_index}",
         f"title: {_yaml_string(proposal['title'])}",
         f"lead: {_yaml_string(proposal['lead'])}",
         "status: published",
@@ -304,7 +307,9 @@ def build_pulse(
     output_path: Path,
     schema_path: Path | None = DEFAULT_SCHEMA_PATH,
 ) -> PulseBuildResult:
-    expected_name = f"{proposal.get('date')}.md"
+    expected_name = PurePosixPath(
+        indexed_pulse_path(str(proposal.get("date")), int(proposal.get("pulse_index", 0)))
+    ).name
     if output_path.name != expected_name:
         raise ValidationError(
             f"pulse output filename must match proposal date: {expected_name}"
@@ -315,7 +320,7 @@ def build_pulse(
     body = markdown.split("\n---\n", 1)[1]
     return PulseBuildResult(
         path=output_path,
-        pulse_id=f"pulse-{proposal['date']}",
+        pulse_id=indexed_pulse_id(str(proposal["date"]), int(proposal["pulse_index"])),
         proposal_fingerprint=str(proposal["proposal_fingerprint"]),
         sha256=hashlib.sha256(payload).hexdigest(),
         word_count=_word_count(body),

@@ -191,7 +191,7 @@ function safePublicReleaseRoot(projectRoot: string, configured: string): string 
 function isAllowedPublicReleasePath(relative: string): boolean {
   if (relative === "current.json") return true;
   if (PUBLIC_KNOWLEDGE_NAMES.some((name) => relative === `knowledge/${name}`)) return true;
-  if (/^pulses\/\d{4}-\d{2}-\d{2}\.md$/.test(relative)) return true;
+  if (/^pulses\/\d{4}-\d{2}-\d{2}(?:-[1-9]\d{0,3})?\.md$/.test(relative)) return true;
   return (
     /^artifacts\/\d{4}-\d{2}-\d{2}\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/.test(
       relative
@@ -438,7 +438,9 @@ function selectPublicReleaseSnapshot(projectRoot: string, configured: string): A
   const pulseModules: Record<string, string> = {};
   const expectedPulseRelatives = new Set<string>();
   for (const reference of acceptedPulses) {
-    const match = reference.match(/^content\/pulses\/(\d{4}-\d{2}-\d{2})\.md$/);
+    const match = reference.match(
+      /^content\/pulses\/(\d{4}-\d{2}-\d{2}(?:-[1-9]\d{0,3})?)\.md$/
+    );
     if (!match) throw new Error(`Public release has an unsafe pulse reference: ${reference}.`);
     const relative = `pulses/${match[1]}.md`;
     const bytes = files.get(relative);
@@ -782,7 +784,7 @@ function buildSelection(
 
 function safeRootPulsePath(projectRoot: string, reference: string): string {
   if (
-    !/^content\/pulses\/\d{4}-\d{2}-\d{2}\.md$/.test(reference) ||
+    !/^content\/pulses\/\d{4}-\d{2}-\d{2}(?:-[1-9]\d{0,3})?\.md$/.test(reference) ||
     reference.includes("\\") ||
     /[\u0000-\u001f\u007f]/.test(reference)
   ) {
@@ -823,7 +825,11 @@ function previewPulseReferences(projectRoot: string): string[] {
       throw new Error("content/pulses must be a regular directory.");
     }
     return readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && /^\d{4}-\d{2}-\d{2}\.md$/.test(entry.name))
+      .filter(
+        (entry) =>
+          entry.isFile() &&
+          /^\d{4}-\d{2}-\d{2}(?:-[1-9]\d{0,3})?\.md$/.test(entry.name)
+      )
       .map((entry) => `content/pulses/${entry.name}`)
       .filter((reference) =>
         hasPublishedFrontmatter(

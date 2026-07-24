@@ -143,6 +143,7 @@ export const PulseFrontmatterSchema = z
     schema_version: SchemaVersionSchema.optional(),
     id: nonEmptyString.optional(),
     date: nonEmptyString.optional(),
+    pulse_index: z.number().int().min(1).max(9999).optional(),
     title: nonEmptyString.optional(),
     lead: nonEmptyString.optional(),
     status: z.enum(["published", "draft", "preview"]).default("published"),
@@ -273,7 +274,9 @@ export const AcceptedArtifactManifestSchema = z.object({
 export const AcceptedPublicationSchema = z
   .object({
     release_id: nonEmptyString.regex(/^release-[a-zA-Z0-9][a-zA-Z0-9._-]*$/),
-    pulse: nonEmptyString.regex(/^content\/pulses\/\d{4}-\d{2}-\d{2}\.md$/),
+    pulse: nonEmptyString.regex(
+      /^content\/pulses\/\d{4}-\d{2}-\d{2}(?:-[1-9]\d{0,3})?\.md$/
+    ),
     bound_pulse: BoundPublicationPathSchema,
     pulse_sha256: Sha256Schema,
     binding_sha256: Sha256Schema,

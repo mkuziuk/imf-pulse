@@ -114,6 +114,7 @@ class AutomaticMaterialization:
         self,
         *,
         run_date: str,
+        pulse_index: int,
         release_id: str,
         analysis: Mapping[str, Any],
         schema_path: Path,
@@ -173,9 +174,10 @@ class AutomaticMaterialization:
         proposal = seal_proposal(
             {
                 "schema_version": "1.0.0",
-                "id": f"automatic-proposal-{run_date}",
+                "id": f"automatic-proposal-{run_date}-{pulse_index}",
                 "status": "selected",
                 "date": run_date,
+                "pulse_index": pulse_index,
                 "candidate_release_id": release_id,
                 "analysis_id": analysis["id"],
                 "analysis_fingerprint": analysis["analysis_fingerprint"],
@@ -748,16 +750,20 @@ def _package_was_consumed(
 
     if checkpoint is None:
         return False
-    expected_pulse = f"content/pulses/{run_date}.md"
+    expected_pulses = {
+        f"content/pulses/{run_date}.md",
+        f"content/pulses/{run_date}-1.md",
+    }
     accepted_pulses = checkpoint.get("accepted_pulses")
     accepted_publications = checkpoint.get("accepted_publications")
     if not isinstance(accepted_pulses, list) or not isinstance(
         accepted_publications, list
     ):
         return False
-    return expected_pulse in accepted_pulses and any(
+    recorded = expected_pulses.intersection(accepted_pulses)
+    return bool(recorded) and any(
         isinstance(publication, Mapping)
-        and publication.get("pulse") == expected_pulse
+        and publication.get("pulse") in recorded
         for publication in accepted_publications
     )
 

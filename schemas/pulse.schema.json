@@ -20,6 +20,7 @@
     "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
     "id": {"$ref": "common.schema.json#/$defs/identifier"},
     "date": {"$ref": "common.schema.json#/$defs/calendarDate"},
+    "pulse_index": {"type": "integer", "minimum": 1, "maximum": 9999},
     "slug": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
     "title": {"type": "string", "minLength": 1},
     "lead": {"type": "string", "minLength": 1},

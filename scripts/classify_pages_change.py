@@ -11,7 +11,7 @@ from typing import Sequence
 
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-DATE = r"\d{4}-\d{2}-\d{2}"
+DATE = r"\d{4}-\d{2}-\d{2}(?:-[1-9][0-9]{0,3})?"
 SAFE_TAIL = r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*"
 CONTENT_PATHS = (
     re.compile(rf"^content/pulses/{DATE}\.md$"),

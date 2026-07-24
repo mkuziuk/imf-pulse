@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from research_pipeline.pulse_validation import parse_pulse
 from research_pipeline.release import build_release_candidate, publish_release
 from research_pipeline.snapshot import build_snapshot
 from research_pipeline.validation import read_json, validate_release_directory
+from scripts.export_public_release import audit_public_release, export_public_release
 
 
 def _prepare_candidate(
@@ -49,7 +51,11 @@ def _sha(payload: bytes) -> str:
 
 
 def _write_publication(
-    project_root: Path, candidate_directory: Path, *, date: str = "2026-01-02"
+    project_root: Path,
+    candidate_directory: Path,
+    *,
+    date: str = "2026-01-02",
+    pulse_index: int | None = None,
 ) -> tuple[str, str, Path]:
     config_directory = project_root / "config"
     config_directory.mkdir(exist_ok=True)
@@ -63,8 +69,9 @@ report:
 """,
         encoding="utf-8",
     )
-    artifact_id = f"artifact-{date}"
-    artifact_url_root = f"/artifacts/{date}/test-chart"
+    index_suffix = f"-{pulse_index}" if pulse_index is not None else ""
+    artifact_id = f"artifact-{date}{index_suffix}"
+    artifact_url_root = f"/artifacts/{date}/test-chart{index_suffix}"
     artifact_directory = project_root / "public" / artifact_url_root.removeprefix("/")
     artifact_directory.mkdir(parents=True)
     payloads = {
@@ -157,11 +164,13 @@ report:
     pulse_directory = project_root / "content" / "pulses"
     pulse_directory.mkdir(parents=True, exist_ok=True)
     filler = " ".join(["measurement"] * 360)
+    pulse_id = f"pulse-{date}{index_suffix}"
+    pulse_index_line = f"pulse_index: {pulse_index}\n" if pulse_index is not None else ""
     pulse = f"""---
 schema_version: "1.0.0"
-id: pulse-{date}
+id: {pulse_id}
 date: {date}
-title: "A Bound Test Signal"
+{pulse_index_line}title: "A Bound Test Signal"
 lead: "One exact-byte fixture exercises the publication boundary."
 status: published
 topics: [imf]
@@ -186,7 +195,7 @@ Can an injected mutation cross the post-gate integrity check?
 
 - [Synthetic static source](/sources#src-test)
 """
-    pulse_relative = f"content/pulses/{date}.md"
+    pulse_relative = f"content/pulses/{date}{index_suffix}.md"
     (project_root / pulse_relative).write_text(pulse, encoding="utf-8")
     return pulse_relative, manifest_url, artifact_directory / "chart.svg"
 
@@ -655,6 +664,70 @@ def test_successor_release_uses_bound_history_after_live_publication_inputs_chan
         schemas_directory,
         read_json(first.release_directory / "release.json")["publication"],
     )
+
+
+def test_two_indexed_pulses_on_one_date_append_to_accepted_history(
+    tmp_path: Path, empty_knowledge: Path, schemas_directory: Path
+) -> None:
+    project = tmp_path / "project"
+    source = tmp_path / "source"
+    config, first = _prepare_candidate(
+        project, source, empty_knowledge, schemas_directory, "same day first"
+    )
+    first_pulse, first_manifest, _ = _write_publication(
+        project, first.release_directory, date="2026-01-02"
+    )
+    publish_release(
+        project,
+        first.release_id,
+        schemas_directory=schemas_directory,
+        pulse=first_pulse,
+        artifact_manifests=(first_manifest,),
+        gate_runner=_ok_gate,
+    )
+
+    (source / "README.md").write_text("same day second", encoding="utf-8")
+    _, snapshot_directory, _ = build_snapshot(config, project)
+    second = build_release_candidate(
+        project,
+        config,
+        snapshot_directory=snapshot_directory,
+        knowledge_directory=empty_knowledge,
+        schemas_directory=schemas_directory,
+    )
+    duplicate_index_pulse, duplicate_index_manifest, _ = _write_publication(
+        project, second.release_directory, date="2026-01-02", pulse_index=1
+    )
+    with pytest.raises(PublicationError, match="next available index 2"):
+        publish_release(
+            project,
+            second.release_id,
+            schemas_directory=schemas_directory,
+            pulse=duplicate_index_pulse,
+            artifact_manifests=(duplicate_index_manifest,),
+            gate_runner=_ok_gate,
+        )
+    second_pulse, second_manifest, _ = _write_publication(
+        project, second.release_directory, date="2026-01-02", pulse_index=2
+    )
+    publish_release(
+        project,
+        second.release_id,
+        schemas_directory=schemas_directory,
+        pulse=second_pulse,
+        artifact_manifests=(second_manifest,),
+        gate_runner=_ok_gate,
+    )
+
+    pointer = read_json(project / "data" / "current.json")
+    assert pointer["accepted_pulses"] == [first_pulse, second_pulse]
+    assert pointer["latest_accepted_pulse"] == second_pulse
+    shutil.copytree(schemas_directory, project / "schemas")
+    summary = export_public_release(project, "public-release")
+    assert summary["pulse_count"] == 2
+    assert (project / "public-release" / "pulses" / "2026-01-02.md").is_file()
+    assert (project / "public-release" / "pulses" / "2026-01-02-2.md").is_file()
+    assert audit_public_release(project / "public-release")["pulse_count"] == 2
 
 
 @pytest.mark.parametrize("tamper", ["truncate", "reorder"])

@@ -44,6 +44,7 @@ def _proposal(**updates: object) -> dict:
         "id": "proposal-2026-07-23",
         "status": "selected",
         "date": "2026-07-23",
+        "pulse_index": 1,
         "candidate_release_id": "release-22222222222222222222",
         "analysis_id": "change-analysis-11111111111111111111",
         "analysis_fingerprint": "b" * 64,
@@ -113,12 +114,13 @@ def test_selected_proposal_renders_deterministically_with_explicit_contract(
 
 def test_build_writes_supplied_staging_path_without_overwriting(tmp_path: Path) -> None:
     proposal = _proposal()
-    output = tmp_path / "staged" / "2026-07-23.md"
+    output = tmp_path / "staged" / "2026-07-23-1.md"
     result = build_pulse(proposal, output)
     assert result.path == output
     assert 350 <= result.word_count <= 650
     frontmatter, _ = parse_pulse(output)
-    assert frontmatter["id"] == "pulse-2026-07-23"
+    assert frontmatter["id"] == "pulse-2026-07-23-1"
+    assert frontmatter["pulse_index"] == 1
     assert frontmatter["artifact_manifests"] == [
         "/artifacts/2026-07-23/stage-profile/manifest.json",
         "/artifacts/2026-07-23/topic-illustration/manifest.json",
@@ -153,8 +155,8 @@ def test_builder_rejects_nonselected_mismatch_remote_evidence_and_short_report(
     short["why_this_matters"] = "The distinction matters."
     short = seal_proposal(short)
     with pytest.raises(ValidationError, match="word count"):
-        build_pulse(short, tmp_path / "2026-07-23.md")
-    assert not (tmp_path / "2026-07-23.md").exists()
+        build_pulse(short, tmp_path / "2026-07-23-1.md")
+    assert not (tmp_path / "2026-07-23-1.md").exists()
 
 
 def _write_cli_release(
@@ -220,7 +222,7 @@ def test_cli_emits_json_and_builds_only_matching_selected_proposal(
     proposal = seal_proposal(proposal)
     proposal_path = tmp_path / "proposal.json"
     proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
-    output = tmp_path / "stage" / "2026-07-23.md"
+    output = tmp_path / "stage" / "2026-07-23-1.md"
     command = [
         sys.executable,
         str(repository_root / "scripts" / "build_daily_pulse.py"),

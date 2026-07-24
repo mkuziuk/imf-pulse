@@ -263,15 +263,16 @@ def test_automatic_package_rejects_candidate_hash_mismatch_without_writes(
     assert not (root / "public" / "artifacts").exists()
 
 
+@pytest.mark.parametrize("pulse_name", [f"{DATE}.md", f"{DATE}-1.md"])
 def test_consumed_automatic_package_is_ignored_before_schema_validation(
-    tmp_path: Path,
+    tmp_path: Path, pulse_name: str,
 ) -> None:
     root = _project(tmp_path)
     package, candidate = _package(root)
     package["diagram"] = package.pop("artifacts")[0]
     package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
     package_path.write_text(json.dumps(package), encoding="utf-8")
-    pulse_path = f"content/pulses/{DATE}.md"
+    pulse_path = f"content/pulses/{pulse_name}"
     checkpoint = {
         "accepted_pulses": [pulse_path],
         "accepted_publications": [{"pulse": pulse_path}],
