@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App, releaseCheckLabel } from "./App";
-import type { KnowledgeSnapshot } from "./lib/data";
+import { getKnowledgeSnapshot, type KnowledgeSnapshot } from "./lib/data";
 
 function renderRoute(route: string) {
   return render(
@@ -70,8 +70,10 @@ describe("application routes", () => {
   });
 
   it("focuses a cited source when opening a source hash", async () => {
-    renderRoute("/sources#src-imf-draft");
-    const source = document.getElementById("src-imf-draft");
+    const sourceId = getKnowledgeSnapshot().sources[0]?.id;
+    expect(sourceId).toBeDefined();
+    renderRoute(`/sources#${sourceId}`);
+    const source = document.getElementById(sourceId!);
     expect(source).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(source));
     expect(source?.scrollIntoView).toHaveBeenCalledWith({ block: "center" });
