@@ -3,8 +3,8 @@
 The scheduled model may prepare one ignored JSON package and one private arXiv
 PDF. This module treats both as untrusted input: it binds the package to an
 exact metadata candidate, validates the primary PDF, extracts page text without
-executing it, validates every knowledge object and locator, renders a passive
-project-owned diagram, and materializes only append-only public records.
+executing it, validates every knowledge object and locator, validates one or
+more explanatory artifacts, and materializes only append-only public records.
 """
 
 from __future__ import annotations
@@ -16,13 +16,14 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence
 
 from pypdf import PdfReader
 
 from .errors import PublicationError
 from .hashing import canonical_json_bytes, canonical_json_hash, sha256_file
+from .paths import open_regular_file_under_root
 from .pulse_builder import seal_proposal, validate_proposal
 from .validation import read_jsonl, strict_json_loads, validate_records
 
@@ -31,6 +32,7 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 SOURCE_ID_RE = re.compile(r"^src-external-arxiv-[a-z0-9-]+$")
 MAX_PDF_BYTES = 32 * 1024 * 1024
 MAX_EXTRACTED_TEXT_BYTES = 8 * 1024 * 1024
+MAX_AUTOMATIC_IMAGE_BYTES = 20 * 1024 * 1024
 
 
 def _atomic_replace(path: Path, payload: bytes, mode: int = 0o644) -> None:
@@ -67,10 +69,19 @@ def _jsonl_bytes(records: Sequence[Mapping[str, Any]]) -> bytes:
 
 
 @dataclass
+class AutomaticArtifactPayload:
+    artifact_id: str
+    manifest_url: str
+    slug: str
+    files: tuple[tuple[str, bytes], ...]
+    manifest_payload: bytes
+
+
+@dataclass
 class AutomaticMaterialization:
     package: Mapping[str, Any]
-    artifact_id: str
-    artifact_manifest_url: str
+    artifact_ids: tuple[str, ...]
+    artifact_manifest_urls: tuple[str, ...]
     source_id: str
     knowledge_ids: tuple[str, ...]
     _backups: dict[Path, bytes | None] = field(default_factory=dict)
@@ -173,8 +184,8 @@ class AutomaticMaterialization:
                 "title": pulse["title"],
                 "lead": pulse["lead"],
                 "topics": pulse["topics"],
-                "featured_artifact": self.artifact_id,
-                "artifact_manifest": self.artifact_manifest_url,
+                "featured_artifact": self.artifact_ids[0],
+                "artifact_manifests": list(self.artifact_manifest_urls),
                 "source_ids": [self.source_id],
                 "knowledge_ids": [str(item) for item in ordered_ids],
                 "signals": rendered_signals,
@@ -227,6 +238,31 @@ def _candidate_for_package(
     if candidate.get("provider") != "arxiv" or candidate.get("source_type") != "preprint":
         raise PublicationError("automatic evidence currently permits arXiv preprints only")
     return candidate
+
+
+def _reviewed_candidate_rights(
+    project_root: Path, candidate: Mapping[str, Any]
+) -> Mapping[str, Any] | None:
+    from .external import load_external_config, lookup_review_decision
+
+    try:
+        external = load_external_config(
+            project_root / "config" / "external-sources.yaml"
+        )
+        ledger = external["policy"]["decision_ledger"]
+        decision = lookup_review_decision(
+            project_root,
+            ledger,
+            str(candidate["id"]),
+            str(candidate["candidate_sha256"]),
+        )
+    except Exception:
+        # Missing or malformed review state never grants source-figure reuse.
+        return None
+    if decision is None or decision.get("decision") != "approved":
+        return None
+    rights = decision.get("rights")
+    return rights if isinstance(rights, Mapping) else None
 
 
 def _extract_pdf(
@@ -302,6 +338,7 @@ def _validate_package_semantics(
     project_root: Path,
     package: dict[str, Any],
     candidate: Mapping[str, Any],
+    reviewed_rights: Mapping[str, Any] | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
     source = dict(package["source"])
     source_id = source.get("id")
@@ -312,6 +349,22 @@ def _validate_package_semantics(
         or package["editor"].get("model") != "gpt-5.6-sol"
     ):
         raise PublicationError("automatic package must identify the approved scheduled model")
+    source_rights = source.get("rights", {})
+    rights_match = isinstance(source_rights, Mapping) and (
+        (
+            reviewed_rights is None
+            and source_rights.get("reuse_status") in {"internal_only", "unknown"}
+            and source_rights.get("public_distribution") is False
+        )
+        or (
+            reviewed_rights is not None
+            and source_rights.get("license") == reviewed_rights.get("license")
+            and source_rights.get("reuse_status")
+            == reviewed_rights.get("reuse_status")
+            and source_rights.get("public_distribution")
+            is reviewed_rights.get("public_distribution")
+        )
+    )
     if (
         source.get("title") != candidate.get("title")
         or source.get("authors") != candidate.get("authors")
@@ -319,7 +372,7 @@ def _validate_package_semantics(
         or source.get("source_type") != "preprint"
         or source.get("authority_level") != "preprint_unreviewed"
         or source.get("publication_status") != "preprint"
-        or source.get("rights", {}).get("public_distribution") is not False
+        or not rights_match
     ):
         raise PublicationError("automatic source metadata does not match the exact arXiv candidate")
     source_sha = source.get("content_sha256")
@@ -419,7 +472,9 @@ def _split_label(value: str, maximum: int = 24) -> list[str]:
     return lines[:3]
 
 
-def _diagram_payloads(run_date: str, diagram: Mapping[str, Any]) -> tuple[str, str, bytes, bytes, bytes]:
+def _diagram_payloads(
+    run_date: str, diagram: Mapping[str, Any]
+) -> AutomaticArtifactPayload:
     slug = diagram["slug"]
     artifact_id = f"automatic-{slug}-{run_date}"
     prefix = f"/artifacts/{run_date}/{slug}"
@@ -450,7 +505,7 @@ def _diagram_payloads(run_date: str, diagram: Mapping[str, Any]) -> tuple[str, s
         f"<desc id=\"desc\">{html.escape(diagram['caption'])}</desc>",
         '<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#d64f37"/></marker></defs>',
         '<rect width="1200" height="480" fill="#f3efe7"/>',
-        '<text x="70" y="75" font-family="Georgia,serif" font-size="34" fill="#171816">A decomposition with two directions</text>',
+        f'<text x="70" y="75" font-family="Georgia,serif" font-size="34" fill="#171816">{html.escape(diagram["title"])}</text>',
         '<line x1="70" y1="100" x2="1130" y2="100" stroke="#171816" stroke-width="1"/>',
     ]
     for edge in diagram["edges"]:
@@ -493,6 +548,7 @@ def _diagram_payloads(run_date: str, diagram: Mapping[str, Any]) -> tuple[str, s
         "artifact_type": "diagram",
         "title": diagram["title"],
         "caption": diagram["caption"],
+        "relation_to_report": diagram["relation_to_report"],
         "stable_url": svg_url,
         "spec_url": spec_url,
         "manifest_url": manifest_url,
@@ -522,7 +578,167 @@ def _diagram_payloads(run_date: str, diagram: Mapping[str, Any]) -> tuple[str, s
         },
         "limitations": diagram["limitations"],
     }
-    return artifact_id, manifest_url, spec_payload, svg_payload, _canonical_json(manifest)
+    return AutomaticArtifactPayload(
+        artifact_id=artifact_id,
+        manifest_url=manifest_url,
+        slug=slug,
+        files=((f"{slug}.json", spec_payload), (f"{slug}.svg", svg_payload)),
+        manifest_payload=_canonical_json(manifest),
+    )
+
+
+def _read_automatic_image(
+    project_root: Path, artifact: Mapping[str, Any]
+) -> tuple[bytes, str]:
+    source_path = artifact["source_path"]
+    pure = PurePosixPath(source_path)
+    if (
+        pure.is_absolute()
+        or pure.parts[:2] != ("tmp", "automatic-visuals")
+        or any(part in {"", ".", ".."} for part in pure.parts)
+    ):
+        raise PublicationError("automatic image path is outside private visual staging")
+    try:
+        with open_regular_file_under_root(project_root, source_path) as descriptor:
+            before = os.fstat(descriptor)
+            payload = os.read(descriptor, MAX_AUTOMATIC_IMAGE_BYTES + 1)
+            after = os.fstat(descriptor)
+    except Exception as exc:
+        raise PublicationError("automatic image is unavailable or unsafe") from exc
+    if (
+        not 1 <= len(payload) <= MAX_AUTOMATIC_IMAGE_BYTES
+        or len(payload) != before.st_size
+        or (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+        != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    ):
+        raise PublicationError("automatic image is empty, oversized, or changed during read")
+    if hashlib.sha256(payload).hexdigest() != artifact["sha256"]:
+        raise PublicationError("automatic image hash does not match")
+    media_type = artifact["media_type"]
+    suffix = pure.suffix.lower()
+    if media_type == "image/png":
+        if suffix != ".png" or not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise PublicationError("automatic PNG type or signature is invalid")
+        extension = ".png"
+    elif media_type == "image/jpeg":
+        if suffix not in {".jpg", ".jpeg"} or not payload.startswith(b"\xff\xd8\xff"):
+            raise PublicationError("automatic JPEG type or signature is invalid")
+        extension = ".jpg"
+    else:
+        raise PublicationError("automatic image media type is unsupported")
+    return payload, extension
+
+
+def _image_payloads(
+    project_root: Path,
+    run_date: str,
+    artifact: Mapping[str, Any],
+    source: Mapping[str, Any],
+    page_count: int,
+) -> AutomaticArtifactPayload:
+    payload, extension = _read_automatic_image(project_root, artifact)
+    slug = artifact["slug"]
+    artifact_id = f"automatic-{slug}-{run_date}"
+    prefix = f"/artifacts/{run_date}/{slug}"
+    image_name = f"{slug}{extension}"
+    image_url = f"{prefix}/{image_name}"
+    manifest_url = f"{prefix}/manifest.json"
+    kind = artifact["kind"]
+    manifest: dict[str, Any] = {
+        "schema_version": 1,
+        "artifact_id": artifact_id,
+        "artifact_date": run_date,
+        "artifact_type": "generated_image" if kind == "generated_image" else "web_image",
+        "title": artifact["title"],
+        "caption": artifact["caption"],
+        "relation_to_report": artifact["relation_to_report"],
+        "stable_url": image_url,
+        "manifest_url": manifest_url,
+        "files": [
+            {
+                "url": image_url,
+                "role": (
+                    "generated conceptual illustration"
+                    if kind == "generated_image"
+                    else "rights-cleared source figure"
+                ),
+                "media_type": artifact["media_type"],
+                "sha256": artifact["sha256"],
+                "bytes": len(payload),
+            }
+        ],
+        "limitations": artifact["limitations"],
+    }
+    if kind == "generated_image":
+        manifest["rights"] = {
+            "status": "project_generated_illustration",
+            "may_publish_publicly": True,
+            "local_display_allowed": True,
+            "public_deployment_requires_owner_approval": False,
+            "license": "All rights reserved",
+            "creator": "The Residual",
+        }
+        manifest["parameters"] = {"generation": dict(artifact["generation"])}
+    else:
+        locator = artifact["locator"]
+        source_rights = source.get("rights", {})
+        artifact_rights = artifact["rights"]
+        if (
+            artifact["source_id"] != source["id"]
+            or artifact["source_sha256"] != source["content_sha256"]
+            or locator.get("kind") != "pdf"
+            or locator.get("path") != source.get("relative_path")
+            or not isinstance(locator.get("page"), int)
+            or not 1 <= locator["page"] <= page_count
+            or not isinstance(source_rights, Mapping)
+            or source_rights.get("reuse_status") not in {"cleared", "public_domain"}
+            or source_rights.get("public_distribution") is not True
+            or artifact_rights["license"] != source_rights.get("license")
+            or artifact_rights["source_url"] != source.get("url")
+        ):
+            raise PublicationError(
+                "automatic source figure lacks exact evidence or source-level reuse clearance"
+            )
+        manifest["rights"] = dict(artifact_rights)
+        manifest["sources"] = [
+            {
+                "source_id": source["id"],
+                "content_sha256": source["content_sha256"],
+                "path": source["relative_path"],
+                "role": "source figure",
+                "execution_status": "not_executed",
+                "rights_status": artifact["rights"]["status"],
+                "locators": [dict(locator)],
+            }
+        ]
+    return AutomaticArtifactPayload(
+        artifact_id=artifact_id,
+        manifest_url=manifest_url,
+        slug=slug,
+        files=((image_name, payload),),
+        manifest_payload=_canonical_json(manifest),
+    )
+
+
+def _artifact_payloads(
+    project_root: Path,
+    run_date: str,
+    artifacts: Sequence[Mapping[str, Any]],
+    source: Mapping[str, Any],
+    page_count: int,
+) -> tuple[AutomaticArtifactPayload, ...]:
+    slugs = [artifact["slug"] for artifact in artifacts]
+    if len(slugs) != len(set(slugs)):
+        raise PublicationError("automatic artifact slugs must be unique")
+    payloads: list[AutomaticArtifactPayload] = []
+    for artifact in artifacts:
+        if artifact["kind"] == "diagram":
+            payloads.append(_diagram_payloads(run_date, artifact))
+        else:
+            payloads.append(
+                _image_payloads(project_root, run_date, artifact, source, page_count)
+            )
+    return tuple(payloads)
 
 
 def load_and_materialize_automatic_package(
@@ -544,15 +760,20 @@ def load_and_materialize_automatic_package(
     if package.get("date") != run_date:
         raise PublicationError("automatic editorial package date does not match the run")
     candidate = _candidate_for_package(package, batch_id, candidates)
-    source, units, _ = _validate_package_semantics(project_root, package, candidate)
+    reviewed_rights = _reviewed_candidate_rights(project_root, candidate)
+    source, units, _ = _validate_package_semantics(
+        project_root, package, candidate, reviewed_rights
+    )
     pulse_ids = tuple(signal["knowledge_id"] for signal in package["pulse"]["signals"])
-    artifact_id, manifest_url, spec_payload, svg_payload, manifest_payload = _diagram_payloads(
-        run_date, package["diagram"]
+    artifact_payloads = _artifact_payloads(
+        project_root, run_date, package["artifacts"], source, len(units)
     )
     materialization = AutomaticMaterialization(
         package=package,
-        artifact_id=artifact_id,
-        artifact_manifest_url=manifest_url,
+        artifact_ids=tuple(payload.artifact_id for payload in artifact_payloads),
+        artifact_manifest_urls=tuple(
+            payload.manifest_url for payload in artifact_payloads
+        ),
         source_id=source["id"],
         knowledge_ids=pulse_ids,
     )
@@ -579,16 +800,28 @@ def load_and_materialize_automatic_package(
             _jsonl_bytes(units),
             0o600,
         )
-        slug = package["diagram"]["slug"]
-        artifact_root = project_root / "public" / "artifacts" / run_date / slug
-        materialization.install(artifact_root / f"{slug}.json", spec_payload)
-        materialization.install(artifact_root / f"{slug}.svg", svg_payload)
-        materialization.install(artifact_root / "manifest.json", manifest_payload)
-        validate_records(
-            [strict_json_loads(manifest_payload.decode("utf-8"))],
-            project_root / "schemas" / "artifact.schema.json",
-            "automatic diagram",
-        )
+        for artifact_payload in artifact_payloads:
+            artifact_root = (
+                project_root
+                / "public"
+                / "artifacts"
+                / run_date
+                / artifact_payload.slug
+            )
+            for filename, payload in artifact_payload.files:
+                materialization.install(artifact_root / filename, payload)
+            materialization.install(
+                artifact_root / "manifest.json", artifact_payload.manifest_payload
+            )
+            validate_records(
+                [
+                    strict_json_loads(
+                        artifact_payload.manifest_payload.decode("utf-8")
+                    )
+                ],
+                project_root / "schemas" / "artifact.schema.json",
+                "automatic artifact",
+            )
     except BaseException:
         materialization.rollback()
         raise

@@ -47,6 +47,9 @@ export function LatestPage() {
     pulse.featuredArtifact
       ? artifactState.artifacts.find((artifact) => artifact.id === pulse.featuredArtifact)
       : undefined;
+  const supportingArtifacts = artifactState.artifacts.filter(
+    (artifact) => artifact.id !== featuredArtifact?.id
+  );
   const candidateBuild = knowledge.current?.status?.startsWith("candidate_") === true;
   const publicationLabel =
     candidateBuild
@@ -102,6 +105,18 @@ export function LatestPage() {
           </p>
         </section>
       )}
+
+      {supportingArtifacts.length > 0 ? (
+        <section className="pulse-supporting-figures" aria-labelledby="supporting-visuals-title">
+          <header className="pulse-supporting-figures__header">
+            <p className="eyebrow">Supporting visuals</p>
+            <h2 id="supporting-visuals-title">Additional views of the topic</h2>
+          </header>
+          {supportingArtifacts.map((artifact) => (
+            <ArtifactFigure key={artifact.id} artifact={artifact} />
+          ))}
+        </section>
+      ) : null}
 
       {pulse.issues.length > 0 ? (
         <aside className="content-warning" role="note" aria-label="Pulse validation notes">

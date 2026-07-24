@@ -67,7 +67,11 @@ export function ArtifactFigure({ artifact, featured = false }: ArtifactFigurePro
   const summary =
     artifact.relation_to_report ??
     "The first recursive stage retains substantially more normalized noise energy than later detail stages, while the single-pass reference remains nearly flat.";
-  const heading = featured ? "Featured evidence" : artifact.title;
+  const heading = featured
+    ? artifact.artifact_class === "scientific_chart"
+      ? "Featured evidence"
+      : "Featured visual"
+    : artifact.title;
   const Heading = "h2";
 
   return (
@@ -78,7 +82,7 @@ export function ArtifactFigure({ artifact, featured = false }: ArtifactFigurePro
     >
       <header className="artifact-figure__header">
         <div>
-          <p className="eyebrow">{featured ? "Dominant figure" : artifact.artifact_class.replace(/_/g, " ")}</p>
+          <p className="eyebrow">{featured ? "Primary visual" : artifact.artifact_class.replace(/_/g, " ")}</p>
           <Heading id={`${artifact.id}-heading`}>{heading}</Heading>
           {featured ? <p className="artifact-figure__title">{artifact.title}</p> : null}
         </div>

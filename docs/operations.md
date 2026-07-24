@@ -133,7 +133,7 @@ The unattended editor may choose at most one exact arXiv candidate and fetch its
   --candidate-sha256 CANDIDATE_SHA256
 ```
 
-The helper rejects non-arXiv candidates, redirects, oversized responses, unexpected content types, and non-PDF bytes. The editor then follows `prompts/automatic-editor.md` and writes one ignored `data/automatic/packages/YYYY-MM-DD.json` conforming to `schemas/automatic-pulse-package.schema.json`. `research_pipeline/automatic.py` revalidates the exact candidate, private PDF hash and structure, page extracts, evidence links, append-only knowledge, deterministic novelty fingerprints, pulse text, and diagram before any accepted file changes. Do not put PDFs or extracted page text in Git or `public-release/`.
+The helper rejects non-arXiv candidates, redirects, oversized responses, unexpected content types, and non-PDF bytes. The editor then follows `prompts/automatic-editor.md` and writes one ignored `data/automatic/packages/YYYY-MM-DD.json` conforming to `schemas/automatic-pulse-package.schema.json`. `research_pipeline/automatic.py` revalidates the exact candidate, private PDF hash and structure, page extracts, evidence links, append-only knowledge, deterministic novelty fingerprints, pulse text, and every selected explanatory artifact before any accepted file changes. Private generated images and rights-cleared source-figure extracts are staged beneath `tmp/automatic-visuals/` and bound by exact hash. Do not put PDFs or extracted page text in Git or `public-release/`.
 
 Compare manually prepared controlled knowledge profiles with:
 

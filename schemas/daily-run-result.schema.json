@@ -80,7 +80,7 @@
       "then": {
         "properties": {
           "pulse_path": {"type": "string"},
-          "artifact_urls": {"minItems": 1, "maxItems": 1},
+          "artifact_urls": {"minItems": 1},
           "release_advanced": {"const": true},
           "checkpoint_refreshed": {"const": true},
           "pending_review_count": {"const": 0},

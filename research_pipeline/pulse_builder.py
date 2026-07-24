@@ -111,13 +111,19 @@ def validate_proposal(
         if len(SENTENCE_END.findall(lead)) != 1:
             errors.append("lead must be exactly one sentence")
 
-    manifest = proposal.get("artifact_manifest")
-    if not isinstance(manifest, str) or not (
-        manifest.startswith("/artifacts/")
-        and manifest.endswith("/manifest.json")
-        and not any(marker in manifest for marker in ("?", "#", "%", "\\", ".."))
-    ):
-        errors.append("artifact_manifest must be one stable local manifest URL")
+    manifests = proposal.get("artifact_manifests")
+    if not isinstance(manifests, list) or not manifests:
+        errors.append("artifact_manifests must contain at least one stable local manifest URL")
+        manifests = []
+    elif len(manifests) != len(set(manifests)):
+        errors.append("artifact_manifests must not contain duplicates")
+    for manifest in manifests:
+        if not isinstance(manifest, str) or not (
+            manifest.startswith("/artifacts/")
+            and manifest.endswith("/manifest.json")
+            and not any(marker in manifest for marker in ("?", "#", "%", "\\", ".."))
+        ):
+            errors.append("artifact_manifests contains an unsafe manifest URL")
     if not isinstance(proposal.get("featured_artifact"), str):
         errors.append("featured_artifact must identify exactly one artifact")
 
@@ -201,7 +207,7 @@ def _render_body(proposal: Mapping[str, Any]) -> str:
                     proposal["why_this_matters"],
                     (
                         "Featured artifact: "
-                        f"[{proposal['featured_artifact']}]({proposal['artifact_manifest']})."
+                        f"[{proposal['featured_artifact']}]({proposal['artifact_manifests'][0]})."
                     ),
                 ]
             ),
@@ -252,7 +258,7 @@ def render_pulse_markdown(
         *(f"  - {topic}" for topic in proposal["topics"]),
         f"featured_artifact: {proposal['featured_artifact']}",
         "artifact_manifests:",
-        f"  - {proposal['artifact_manifest']}",
+        *(f"  - {manifest}" for manifest in proposal["artifact_manifests"]),
         "source_ids:",
         *(f"  - {source_id}" for source_id in proposal["source_ids"]),
         "knowledge_ids:",

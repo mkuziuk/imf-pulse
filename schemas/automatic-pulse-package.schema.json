@@ -11,7 +11,7 @@
     "source",
     "knowledge",
     "pulse",
-    "diagram"
+    "artifacts"
   ],
   "properties": {
     "schema_version": {"const": "1.0.0"},
@@ -100,13 +100,38 @@
       },
       "additionalProperties": false
     },
-    "diagram": {
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/artifact"}
+    }
+  },
+  "$defs": {
+    "artifact": {
       "type": "object",
-      "required": ["slug", "title", "caption", "nodes", "edges", "limitations"],
+      "required": [
+        "kind",
+        "slug",
+        "title",
+        "caption",
+        "relation_to_report",
+        "limitations"
+      ],
       "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["diagram", "generated_image", "source_figure"]
+        },
         "slug": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
         "title": {"type": "string", "minLength": 1, "maxLength": 160},
         "caption": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "relation_to_report": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": {"type": "string", "minLength": 1}
+        },
         "nodes": {
           "type": "array",
           "minItems": 2,
@@ -119,17 +144,82 @@
           "maxItems": 12,
           "items": {"$ref": "#/$defs/edge"}
         },
-        "limitations": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 5,
-          "items": {"type": "string", "minLength": 1}
+        "source_path": {
+          "type": "string",
+          "pattern": "^tmp/automatic-visuals/[a-z0-9][a-z0-9._-]*\\.(?:png|jpg|jpeg)$"
+        },
+        "sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+        "media_type": {"type": "string", "enum": ["image/png", "image/jpeg"]},
+        "generation": {
+          "type": "object",
+          "required": ["model", "prompt", "generated_at"],
+          "properties": {
+            "model": {"type": "string", "minLength": 1, "maxLength": 100},
+            "prompt": {"type": "string", "minLength": 20, "maxLength": 8000},
+            "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"}
+          },
+          "additionalProperties": false
+        },
+        "source_id": {"$ref": "common.schema.json#/$defs/identifier"},
+        "source_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+        "locator": {"$ref": "evidence.schema.json#/$defs/structuredLocator"},
+        "rights": {
+          "type": "object",
+          "required": [
+            "status",
+            "license",
+            "creator",
+            "source_url",
+            "retrieved_at",
+            "may_publish_publicly",
+            "local_display_allowed"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["cleared", "public_domain", "cc_by", "cc_by_sa", "cc0"]
+            },
+            "license": {"type": "string", "minLength": 1},
+            "creator": {"type": "string", "minLength": 1},
+            "source_url": {"type": "string", "format": "uri"},
+            "retrieved_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+            "may_publish_publicly": {"const": true},
+            "local_display_allowed": {"const": true}
+          },
+          "additionalProperties": false
         }
       },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "diagram"}}},
+          "then": {"required": ["nodes", "edges"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "generated_image"}}},
+          "then": {
+            "required": ["source_path", "sha256", "media_type", "generation"],
+            "properties": {
+              "caption": {"pattern": "Conceptual illustration — not research evidence"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "source_figure"}}},
+          "then": {
+            "required": [
+              "source_path",
+              "sha256",
+              "media_type",
+              "source_id",
+              "source_sha256",
+              "locator",
+              "rights"
+            ]
+          }
+        }
+      ],
       "additionalProperties": false
-    }
-  },
-  "$defs": {
+    },
     "signal": {
       "type": "object",
       "required": [

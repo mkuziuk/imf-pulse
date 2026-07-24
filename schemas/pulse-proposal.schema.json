@@ -43,9 +43,14 @@
       "items": {"$ref": "common.schema.json#/$defs/identifier"}
     },
     "featured_artifact": {"$ref": "common.schema.json#/$defs/identifier"},
-    "artifact_manifest": {
-      "type": "string",
-      "pattern": "^/artifacts/[A-Za-z0-9._~/-]+/manifest\\.json$"
+    "artifact_manifests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^/artifacts/[A-Za-z0-9._~/-]+/manifest\\.json$"
+      }
     },
     "source_ids": {
       "type": "array",
@@ -82,7 +87,7 @@
           "lead",
           "topics",
           "featured_artifact",
-          "artifact_manifest",
+          "artifact_manifests",
           "source_ids",
           "knowledge_ids",
           "signals",

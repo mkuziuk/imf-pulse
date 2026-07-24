@@ -36,7 +36,7 @@ When a pulse is warranted, draft 350–650 words with:
 2. A one-sentence lead.
 3. At most three `Signal` sections.
 4. One `Why this matters` synthesis.
-5. Exactly one featured chart, diagram, or meaningful image referenced by approved artifact ID.
+5. One or more meaningful visuals referenced by approved artifact IDs, with one designated as the featured visual.
 6. One testable `Unresolved question`.
 7. A compact source list.
 
@@ -53,7 +53,7 @@ Never:
 - claim novelty solely because a source is new;
 - use raw HTML or unsupported links.
 
-Generated images, if approved, must carry the exact label `Conceptual illustration — not research evidence`. The report must remain valid without them. Automatic reports use deterministic project-generated diagrams; they never reuse source figures.
+Generated images, if approved, must carry the exact label `Conceptual illustration — not research evidence`. The report must remain valid without them. For automatic reports, prefer a relevant rights-cleared source figure or a generated conceptual illustration that makes the research object understandable; use a chart or diagram when it is the clearer choice. Every additional visual must explain a distinct aspect of the topic.
 
 ## Output
 

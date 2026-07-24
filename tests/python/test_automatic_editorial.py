@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from pypdf import PdfWriter
 
+import research_pipeline.automatic as automatic_module
 from research_pipeline.automatic import load_and_materialize_automatic_package
 from research_pipeline.errors import PublicationError
 
@@ -153,18 +154,45 @@ def _package(root: Path) -> tuple[dict, dict]:
             "source_label": "Ada Example (2026)",
             "source_locator": "arXiv test fixture, p. 1",
         },
-        "diagram": {
-            "slug": "automatic-test",
-            "title": "A bounded automatic path",
-            "caption": "A passive test diagram.",
-            "nodes": [
-                {"id": "source", "label": "Primary source"},
-                {"id": "claim", "label": "Verified claim"},
-            ],
-            "edges": [{"from": "source", "to": "claim", "label": "page evidence"}],
-            "limitations": ["Test diagram only."],
-        },
+        "artifacts": [
+            {
+                "kind": "diagram",
+                "slug": "automatic-test",
+                "title": "A bounded automatic path",
+                "caption": "A passive test diagram.",
+                "relation_to_report": "It explains the verified editorial path.",
+                "nodes": [
+                    {"id": "source", "label": "Primary source"},
+                    {"id": "claim", "label": "Verified claim"},
+                ],
+                "edges": [
+                    {"from": "source", "to": "claim", "label": "page evidence"}
+                ],
+                "limitations": ["Test diagram only."],
+            },
+            {
+                "kind": "generated_image",
+                "slug": "automatic-illustration",
+                "title": "A bounded automatic illustration",
+                "caption": "A visual test fixture. Conceptual illustration — not research evidence",
+                "relation_to_report": "It gives a second visual perspective.",
+                "limitations": ["Synthetic test bytes only."],
+                "source_path": "tmp/automatic-visuals/automatic-illustration.png",
+                "sha256": "",
+                "media_type": "image/png",
+                "generation": {
+                    "model": "test-image-model",
+                    "prompt": "Create a restrained scientific illustration for this automatic test fixture.",
+                    "generated_at": "2026-07-24T05:00:00Z",
+                },
+            },
+        ],
     }
+    image_payload = b"\x89PNG\r\n\x1a\nfixture"
+    image_path = root / "tmp" / "automatic-visuals" / "automatic-illustration.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(image_payload)
+    package["artifacts"][1]["sha256"] = hashlib.sha256(image_payload).hexdigest()
     path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps(package), encoding="utf-8")
@@ -182,6 +210,11 @@ def test_automatic_package_materializes_append_only_records_and_rolls_back(
     assert outcome is not None
     assert outcome.source_id == SOURCE_ID
     assert outcome.knowledge_ids == ("claim-automatic-test",)
+    assert outcome.artifact_ids == (
+        "automatic-automatic-test-2026-07-24",
+        "automatic-automatic-illustration-2026-07-24",
+    )
+    assert len(outcome.artifact_manifest_urls) == 2
     assert (root / "knowledge" / "curated" / "sources.jsonl").is_file()
     assert (root / "public" / "artifacts" / DATE / "automatic-test" / "manifest.json").is_file()
     svg = (root / "public" / "artifacts" / DATE / "automatic-test" / "automatic-test.svg").read_text(
@@ -189,11 +222,28 @@ def test_automatic_package_materializes_append_only_records_and_rolls_back(
     )
     assert 'y="155"' in svg
     assert 'y="216"' not in svg
+    assert "A bounded automatic path" in svg
+    assert (
+        root
+        / "public"
+        / "artifacts"
+        / DATE
+        / "automatic-illustration"
+        / "automatic-illustration.png"
+    ).is_file()
     assert (root / "data" / "automatic" / "extracts" / f"{SOURCE_ID}.jsonl").is_file()
 
     outcome.rollback()
     assert not (root / "knowledge" / "curated" / "sources.jsonl").exists()
     assert not (root / "public" / "artifacts" / DATE / "automatic-test" / "manifest.json").exists()
+    assert not (
+        root
+        / "public"
+        / "artifacts"
+        / DATE
+        / "automatic-illustration"
+        / "manifest.json"
+    ).exists()
     assert not (root / "data" / "automatic" / "extracts" / f"{SOURCE_ID}.jsonl").exists()
     assert package["source"]["content_sha256"]
 
@@ -210,4 +260,157 @@ def test_automatic_package_rejects_candidate_hash_mismatch_without_writes(
             root, DATE, batch_id=BATCH_ID, candidates=[tampered]
         )
     assert not (root / "knowledge" / "curated" / "sources.jsonl").exists()
+    assert not (root / "public" / "artifacts").exists()
+
+
+def test_automatic_package_rejects_source_figure_without_reviewed_reuse_rights(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    figure = package["artifacts"][1]
+    figure.update(
+        {
+            "kind": "source_figure",
+            "caption": "A source figure test fixture.",
+            "source_id": SOURCE_ID,
+            "source_sha256": package["source"]["content_sha256"],
+            "locator": {
+                "kind": "pdf",
+                "path": "external/arxiv/2607.12345v1.pdf",
+                "page": 1,
+                "section": "Figure 1",
+            },
+            "rights": {
+                "status": "cc_by",
+                "license": "CC BY 4.0",
+                "creator": "Ada Example",
+                "source_url": "https://arxiv.org/abs/2607.12345v1",
+                "retrieved_at": "2026-07-24T05:00:00Z",
+                "may_publish_publicly": True,
+                "local_display_allowed": True,
+            },
+        }
+    )
+    figure.pop("generation")
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+
+    with pytest.raises(PublicationError, match="reuse clearance"):
+        load_and_materialize_automatic_package(
+            root, DATE, batch_id=BATCH_ID, candidates=[candidate]
+        )
+    assert not (root / "public" / "artifacts").exists()
+
+
+def test_automatic_package_accepts_exact_rights_cleared_source_figure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    reviewed_rights = {
+        "license": "CC BY 4.0",
+        "reuse_status": "cleared",
+        "public_distribution": True,
+    }
+    package["source"]["rights"] = reviewed_rights
+    figure = package["artifacts"][1]
+    figure.update(
+        {
+            "kind": "source_figure",
+            "caption": "A rights-cleared source figure test fixture.",
+            "source_id": SOURCE_ID,
+            "source_sha256": package["source"]["content_sha256"],
+            "locator": {
+                "kind": "pdf",
+                "path": "external/arxiv/2607.12345v1.pdf",
+                "page": 1,
+                "section": "Figure 1",
+            },
+            "rights": {
+                "status": "cc_by",
+                "license": "CC BY 4.0",
+                "creator": "Ada Example",
+                "source_url": "https://arxiv.org/abs/2607.12345v1",
+                "retrieved_at": "2026-07-24T05:00:00Z",
+                "may_publish_publicly": True,
+                "local_display_allowed": True,
+            },
+        }
+    )
+    figure.pop("generation")
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+    monkeypatch.setattr(
+        automatic_module,
+        "_reviewed_candidate_rights",
+        lambda _root, _candidate: reviewed_rights,
+    )
+
+    outcome = load_and_materialize_automatic_package(
+        root, DATE, batch_id=BATCH_ID, candidates=[candidate]
+    )
+    assert outcome is not None
+    manifest = json.loads(
+        (
+            root
+            / "public"
+            / "artifacts"
+            / DATE
+            / "automatic-illustration"
+            / "manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert manifest["artifact_type"] == "web_image"
+    assert manifest["rights"]["status"] == "cc_by"
+
+
+def test_automatic_package_rejects_source_figure_rights_that_do_not_match_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    reviewed_rights = {
+        "license": "CC BY 4.0",
+        "reuse_status": "cleared",
+        "public_distribution": True,
+    }
+    package["source"]["rights"] = reviewed_rights
+    figure = package["artifacts"][1]
+    figure.update(
+        {
+            "kind": "source_figure",
+            "caption": "A source figure with mismatched rights.",
+            "source_id": SOURCE_ID,
+            "source_sha256": package["source"]["content_sha256"],
+            "locator": {
+                "kind": "pdf",
+                "path": "external/arxiv/2607.12345v1.pdf",
+                "page": 1,
+                "section": "Figure 1",
+            },
+            "rights": {
+                "status": "cc0",
+                "license": "CC0 1.0",
+                "creator": "Ada Example",
+                "source_url": "https://arxiv.org/abs/2607.12345v1",
+                "retrieved_at": "2026-07-24T05:00:00Z",
+                "may_publish_publicly": True,
+                "local_display_allowed": True,
+            },
+        }
+    )
+    figure.pop("generation")
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+    monkeypatch.setattr(
+        automatic_module,
+        "_reviewed_candidate_rights",
+        lambda _root, _candidate: reviewed_rights,
+    )
+
+    with pytest.raises(PublicationError, match="reuse clearance"):
+        load_and_materialize_automatic_package(
+            root, DATE, batch_id=BATCH_ID, candidates=[candidate]
+        )
     assert not (root / "public" / "artifacts").exists()

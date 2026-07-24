@@ -53,7 +53,10 @@ def _proposal(**updates: object) -> dict:
         "lead": "An exact comparison changes how the recursive error should be interpreted.",
         "topics": ["recursive-error"],
         "featured_artifact": "artifact-stage-profile-2026-07-23",
-        "artifact_manifest": "/artifacts/2026-07-23/stage-profile/manifest.json",
+        "artifact_manifests": [
+            "/artifacts/2026-07-23/stage-profile/manifest.json",
+            "/artifacts/2026-07-23/topic-illustration/manifest.json",
+        ],
         "source_ids": ["src-test"],
         "knowledge_ids": ["claim-new"],
         "signals": [
@@ -101,6 +104,7 @@ def test_selected_proposal_renders_deterministically_with_explicit_contract(
     assert "**Assumptions and limitations.**" in first
     assert first.count("artifact_manifests:") == 1
     assert first.count("featured_artifact:") == 1
+    assert "topic-illustration/manifest.json" in first
 
     staged = repository_root / "data" / ".staging-test-do-not-write.md"
     # Rendering itself has no filesystem side effect.
@@ -116,7 +120,8 @@ def test_build_writes_supplied_staging_path_without_overwriting(tmp_path: Path) 
     frontmatter, _ = parse_pulse(output)
     assert frontmatter["id"] == "pulse-2026-07-23"
     assert frontmatter["artifact_manifests"] == [
-        "/artifacts/2026-07-23/stage-profile/manifest.json"
+        "/artifacts/2026-07-23/stage-profile/manifest.json",
+        "/artifacts/2026-07-23/topic-illustration/manifest.json",
     ]
     assert frontmatter["word_count"] == result.word_count
 

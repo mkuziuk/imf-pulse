@@ -813,9 +813,11 @@ def _default_build_pulse(
     _install_immutable_bytes(
         context.project_root, output_relative, expected.encode("utf-8")
     )
-    manifest = proposal.get("artifact_manifest")
-    if not isinstance(manifest, str):
-        raise PublicationError("selected proposal has no artifact manifest")
+    manifests = proposal.get("artifact_manifests")
+    if not isinstance(manifests, list) or not all(
+        isinstance(manifest, str) for manifest in manifests
+    ):
+        raise PublicationError("selected proposal has no artifact manifests")
     evidence = sorted(
         {
             item
@@ -824,7 +826,7 @@ def _default_build_pulse(
             if isinstance(item, str)
         }
     )
-    return PulseOutcome(output_relative, (manifest,), tuple(evidence))
+    return PulseOutcome(output_relative, tuple(manifests), tuple(evidence))
 
 
 def _quiet_gate_runner(
@@ -908,14 +910,16 @@ def _validate_pulse_outcome(context: DailyContext, pulse: PulseOutcome) -> None:
     expected_path = f"content/pulses/{context.date}.md"
     if pulse.path != expected_path:
         raise PublicationError("pulse output path does not match the run date")
-    if len(pulse.artifact_manifest_urls) != 1:
-        raise PublicationError("a pulse must bind exactly one artifact manifest")
-    manifest = pulse.artifact_manifest_urls[0]
-    if (
-        not re.fullmatch(r"/artifacts/[A-Za-z0-9._~/-]+/manifest\.json", manifest)
-        or ".." in PurePosixPath(manifest).parts
-    ):
-        raise PublicationError("pulse artifact manifest URL is unsafe")
+    if not pulse.artifact_manifest_urls:
+        raise PublicationError("a pulse must bind at least one artifact manifest")
+    if len(pulse.artifact_manifest_urls) != len(set(pulse.artifact_manifest_urls)):
+        raise PublicationError("pulse artifact manifest URLs must be unique")
+    for manifest in pulse.artifact_manifest_urls:
+        if (
+            not re.fullmatch(r"/artifacts/[A-Za-z0-9._~/-]+/manifest\.json", manifest)
+            or ".." in PurePosixPath(manifest).parts
+        ):
+            raise PublicationError("pulse artifact manifest URL is unsafe")
 
 
 def _safe_reason(exc: BaseException, project_root: Path) -> str:
