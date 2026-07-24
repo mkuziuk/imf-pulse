@@ -11,7 +11,7 @@ from pypdf import PdfWriter
 
 import research_pipeline.automatic as automatic_module
 from research_pipeline.automatic import load_and_materialize_automatic_package
-from research_pipeline.errors import PublicationError
+from research_pipeline.errors import PublicationError, ValidationError
 
 
 PROJECT = Path(__file__).resolve().parents[2]
@@ -260,6 +260,55 @@ def test_automatic_package_rejects_candidate_hash_mismatch_without_writes(
             root, DATE, batch_id=BATCH_ID, candidates=[tampered]
         )
     assert not (root / "knowledge" / "curated" / "sources.jsonl").exists()
+    assert not (root / "public" / "artifacts").exists()
+
+
+def test_consumed_automatic_package_is_ignored_before_schema_validation(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    package["diagram"] = package.pop("artifacts")[0]
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+    pulse_path = f"content/pulses/{DATE}.md"
+    checkpoint = {
+        "accepted_pulses": [pulse_path],
+        "accepted_publications": [{"pulse": pulse_path}],
+    }
+
+    outcome = load_and_materialize_automatic_package(
+        root,
+        DATE,
+        batch_id=BATCH_ID,
+        candidates=[candidate],
+        checkpoint=checkpoint,
+    )
+
+    assert outcome is None
+    assert not (root / "public" / "artifacts").exists()
+    assert not (root / "data" / "automatic" / "extracts").exists()
+
+
+def test_unconsumed_legacy_package_remains_fail_closed(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    package["diagram"] = package.pop("artifacts")[0]
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="automatic editorial package"):
+        load_and_materialize_automatic_package(
+            root,
+            DATE,
+            batch_id=BATCH_ID,
+            candidates=[candidate],
+            checkpoint={
+                "accepted_pulses": [f"content/pulses/{DATE}.md"],
+                "accepted_publications": [],
+            },
+        )
+
     assert not (root / "public" / "artifacts").exists()
 
 

@@ -171,6 +171,8 @@ The command emits one JSON result:
 
 Exit status is zero for `published`, `no_update`, and `review_required`; it is nonzero for `blocked` and `failed`. Use the JSON fields `release_advanced` and `checkpoint_refreshed` rather than inferring state from a source hash or timestamp.
 
+An automatic package is single-use staging. Once its dated pulse appears in the sealed accepted-publication history, same-day reruns ignore the leftover private package and cannot publish a second pulse for that date. An unconsumed package always remains subject to the current fail-closed schema and evidence checks.
+
 ### Scheduled task boundary
 
 The Codex desktop scheduled task is configured outside the repository with these fixed properties:

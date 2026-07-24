@@ -741,13 +741,41 @@ def _artifact_payloads(
     return tuple(payloads)
 
 
+def _package_was_consumed(
+    checkpoint: Mapping[str, Any] | None, run_date: str
+) -> bool:
+    """Return true only when the accepted history records this date's pulse."""
+
+    if checkpoint is None:
+        return False
+    expected_pulse = f"content/pulses/{run_date}.md"
+    accepted_pulses = checkpoint.get("accepted_pulses")
+    accepted_publications = checkpoint.get("accepted_publications")
+    if not isinstance(accepted_pulses, list) or not isinstance(
+        accepted_publications, list
+    ):
+        return False
+    return expected_pulse in accepted_pulses and any(
+        isinstance(publication, Mapping)
+        and publication.get("pulse") == expected_pulse
+        for publication in accepted_publications
+    )
+
+
 def load_and_materialize_automatic_package(
     project_root: Path,
     run_date: str,
     *,
     batch_id: str | None,
     candidates: Sequence[Mapping[str, Any]],
+    checkpoint: Mapping[str, Any] | None = None,
 ) -> AutomaticMaterialization | None:
+    # A package is single-use input. Once its dated pulse is present in both
+    # accepted-history views, a same-day rerun must not revalidate or
+    # rematerialize leftover private staging against a newer code/schema
+    # version. The release transaction later revalidates the sealed checkpoint.
+    if _package_was_consumed(checkpoint, run_date):
+        return None
     package_path = project_root / "data" / "automatic" / "packages" / f"{run_date}.json"
     if not package_path.exists():
         return None

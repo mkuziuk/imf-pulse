@@ -1009,6 +1009,7 @@ def run_daily_pipeline(
                     context.date,
                     batch_id=external.batch_id,
                     candidates=external.candidate_records,
+                    checkpoint=checkpoint,
                 )
 
             snapshot = dependencies.sync_local(context)
