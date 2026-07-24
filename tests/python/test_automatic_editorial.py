@@ -184,6 +184,11 @@ def test_automatic_package_materializes_append_only_records_and_rolls_back(
     assert outcome.knowledge_ids == ("claim-automatic-test",)
     assert (root / "knowledge" / "curated" / "sources.jsonl").is_file()
     assert (root / "public" / "artifacts" / DATE / "automatic-test" / "manifest.json").is_file()
+    svg = (root / "public" / "artifacts" / DATE / "automatic-test" / "automatic-test.svg").read_text(
+        encoding="utf-8"
+    )
+    assert 'y="155"' in svg
+    assert 'y="216"' not in svg
     assert (root / "data" / "automatic" / "extracts" / f"{SOURCE_ID}.jsonl").is_file()
 
     outcome.rollback()

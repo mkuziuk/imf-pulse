@@ -460,7 +460,7 @@ def _diagram_payloads(run_date: str, diagram: Mapping[str, Any]) -> tuple[str, s
             f'<line x1="{x1 + 95:.1f}" y1="{y1:.1f}" x2="{x2 - 95:.1f}" y2="{y2:.1f}" stroke="#d64f37" stroke-width="3" marker-end="url(#arrow)"/>'
         )
         svg.append(
-            f'<text x="{(x1 + x2) / 2:.1f}" y="{y1 - 24:.1f}" text-anchor="middle" font-family="Arial,sans-serif" font-size="15" fill="#62635f">{html.escape(edge["label"])}</text>'
+            f'<text x="{(x1 + x2) / 2:.1f}" y="155" text-anchor="middle" font-family="Arial,sans-serif" font-size="15" fill="#62635f">{html.escape(edge["label"])}</text>'
         )
     for node in nodes:
         x, y = positions[node["id"]]

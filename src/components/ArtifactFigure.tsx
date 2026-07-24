@@ -9,6 +9,7 @@ import { isExternalHref, safeHref, sourceAnchor, withAppUrl, withBaseUrl } from 
 import type { ArtifactRecord, StageErrorDatum } from "../lib/schemas";
 import { ScientificChart } from "./ScientificChart";
 import { StatusLabel } from "./StatusLabel";
+import { StructuralDiagram } from "./StructuralDiagram";
 
 interface ArtifactFigureProps {
   artifact: ArtifactRecord;
@@ -43,6 +44,7 @@ export function ArtifactFigure({ artifact, featured = false }: ArtifactFigurePro
     [artifact.files]
   );
   const imageFile = artifact.files.find((file) => fileMatches(file, /\bimage\b|svg|png|jpe?g/i));
+  const specFile = artifact.files.find((file) => fileMatches(file, /\bspec\b|json/i));
   const renderAllowed = artifactCanRenderMedia(artifact);
   const publiclyCleared = artifactIsPubliclyCleared(artifact);
   const limitationsValue = (artifact as ArtifactRecord & { limitations?: unknown }).limitations;
@@ -99,7 +101,15 @@ export function ArtifactFigure({ artifact, featured = false }: ArtifactFigurePro
 
       {artifact.artifact_class !== "scientific_chart" && renderAllowed && imageFile ? (
         <figure className="artifact-image">
-          <img src={withBaseUrl(imageFile.url)} alt={artifact.caption} loading="lazy" />
+          {artifact.artifact_class === "diagram" && specFile ? (
+            <StructuralDiagram
+              specUrl={specFile.url}
+              fallbackUrl={imageFile.url}
+              caption={artifact.caption}
+            />
+          ) : (
+            <img src={withBaseUrl(imageFile.url)} alt={artifact.caption} loading="lazy" />
+          )}
           <figcaption>{artifact.caption}</figcaption>
         </figure>
       ) : null}

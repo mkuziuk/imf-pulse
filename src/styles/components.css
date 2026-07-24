@@ -380,14 +380,21 @@
   }
 }
 
-.scientific-chart figcaption,
-.artifact-image figcaption {
+.scientific-chart figcaption {
   display: grid;
   grid-template-columns: 5rem minmax(0, 1fr);
   margin-top: 1rem;
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.5;
+}
+
+.artifact-image figcaption {
+  max-width: 52rem;
+  margin-top: 1.25rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
 }
 
 .figure-number {
@@ -520,6 +527,90 @@
   width: 100%;
   max-height: 75vh;
   object-fit: contain;
+}
+
+.structural-diagram {
+  min-width: 0;
+  margin-top: clamp(2.5rem, 5vw, 4.5rem);
+  padding-block: clamp(1.4rem, 3vw, 2.4rem) clamp(2rem, 4vw, 3.5rem);
+  border-block: 1px solid var(--rule);
+}
+
+.structural-diagram__flow {
+  --connector-width: clamp(3.5rem, 7vw, 7rem);
+  display: grid;
+  grid-template-columns: repeat(var(--diagram-columns), minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.structural-diagram__step {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.structural-diagram__node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: calc(100% - var(--connector-width));
+  min-height: clamp(6.5rem, 10vw, 8rem);
+  place-items: center;
+  padding: 1rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 0.2rem;
+  background: var(--paper-raised);
+  font-size: clamp(0.92rem, 1.5vw, 1.2rem);
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.structural-diagram__step:last-child .structural-diagram__node {
+  width: 100%;
+}
+
+.structural-diagram__connector {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: calc(100% - var(--connector-width));
+  width: var(--connector-width);
+  transform: translateY(-50%);
+}
+
+.structural-diagram__connector span {
+  position: absolute;
+  right: 0;
+  bottom: 1.05rem;
+  width: 100%;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: clamp(0.64rem, 0.72vw, 0.72rem);
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.structural-diagram__connector i {
+  position: relative;
+  display: block;
+  border-top: 2px solid var(--accent);
+}
+
+.structural-diagram__connector i::after {
+  position: absolute;
+  top: -0.38rem;
+  right: -0.05rem;
+  border-width: 0.32rem 0 0.32rem 0.55rem;
+  border-style: solid;
+  border-color: transparent transparent transparent var(--accent);
+  content: "";
+}
+
+.structural-diagram--fallback {
+  border: 0;
 }
 
 .pulse > .content-warning {
@@ -1361,10 +1452,74 @@
     min-height: 19rem;
   }
 
-  .scientific-chart figcaption,
-  .artifact-image figcaption {
+  .scientific-chart figcaption {
     grid-template-columns: 1fr;
     gap: 0.35rem;
+  }
+
+  .artifact-image figcaption {
+    margin-top: 1rem;
+  }
+
+  .structural-diagram {
+    margin-top: 2rem;
+    padding-block: 1.25rem 2rem;
+  }
+
+  .structural-diagram__flow {
+    display: block;
+    max-width: 20rem;
+    margin-inline: auto;
+  }
+
+  .structural-diagram__step {
+    display: block;
+  }
+
+  .structural-diagram__node {
+    width: 100%;
+    min-height: 5.75rem;
+    font-size: 1rem;
+  }
+
+  .structural-diagram__connector {
+    position: relative;
+    top: auto;
+    right: auto;
+    left: auto;
+    display: grid;
+    width: 100%;
+    min-height: 5.5rem;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    align-items: center;
+    transform: none;
+  }
+
+  .structural-diagram__connector span {
+    position: static;
+    width: auto;
+    grid-column: 2;
+    transform: none;
+    font-size: 0.68rem;
+    text-align: left;
+  }
+
+  .structural-diagram__connector i {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 1rem;
+    border-top: 0;
+    border-left: 2px solid var(--accent);
+  }
+
+  .structural-diagram__connector i::after {
+    top: auto;
+    right: auto;
+    bottom: -0.05rem;
+    left: -0.37rem;
+    border-width: 0.55rem 0.32rem 0;
+    border-color: var(--accent) transparent transparent;
   }
 
   .chart-summary,
