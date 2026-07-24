@@ -34,7 +34,7 @@ The Residual remains a file-based local MVP. It has no application server, datab
 
 - `config/external-sources.yaml` fixes reviewed arXiv and Crossref HTTPS endpoints, allowed hosts, query vocabulary, publication types, century-scale historical discovery windows, result limits, response size, timeout, and receipt/review paths.
 - `research_pipeline/external.py` parses arXiv XML with DTD/entity rejection and strict Crossref JSON, normalizes provider identities, writes immutable private receipts and hash-bound candidate batches, and never exposes a full-text download or code-execution path.
-- `scripts/search_external_sources.py --as-of ...` performs deterministic discovery. New candidates are deferred metadata, never accepted evidence by themselves.
+- `scripts/search_external_sources.py --as-of ...` performs deterministic discovery. Scheduled use adds `--scheduled-outcome-date DATE`, producing one ignored hash-bound batch/deferred handoff so the wrapper never repeats the provider search. Provider timeouts are deferred; validation and integrity failures remain hard failures. New candidates are deferred metadata, never accepted evidence by themselves.
 - `scripts/review_external_source.py` appends one explicit `approved` or `rejected` decision bound to the batch, candidate ID, candidate SHA-256, reviewer, timestamp, rationale, and rights record. Existing decisions cannot be replaced.
 - `scripts/compare_knowledge.py` compares manually prepared controlled profiles. It reports different definitions, different targets, exact-scope contradictions, and missing/scope review gaps; every finding still requires review.
 - `schemas/external-{candidate,batch,decision}.schema.json` and `schemas/comparison-finding.schema.json` define these records.

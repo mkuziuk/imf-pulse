@@ -163,7 +163,7 @@ DATE="$(TZ=Europe/Moscow date +%F)"
   --date "$DATE"
 ```
 
-The scheduled editor performs metadata search and, when justified, prepares one automatic package before calling the transaction. Do not call synchronization, analysis, rendering, or publication piecemeal around that call. The transaction owns the lock and checkpoint sequence. Unresolved metadata is deferred; only a completely verified package can contribute external evidence.
+The scheduled editor performs metadata search with `--scheduled-outcome-date "$DATE"` and, when justified, prepares one automatic package before calling the transaction. That option replaces an ignored `data/automatic/external-search-outcomes/$DATE.json` handoff. A successful handoff binds the exact immutable batch ID and SHA-256; an arXiv or Crossref timeout records a batch-free deferred outcome. The wrapper consumes the handoff instead of issuing a second metadata search. A deferred timeout continues local processing and returns `no_update` when nothing else changed; malformed outcomes and non-timeout search failures remain fail-closed. Do not call synchronization, analysis, rendering, or publication piecemeal around that call. The transaction owns the lock and checkpoint sequence. Unresolved metadata is deferred; only a completely verified package can contribute external evidence.
 
 The command emits one JSON result:
 
@@ -185,6 +185,8 @@ The Codex desktop scheduled task is configured outside the repository with these
 - target: `$PROJECT_ROOT`;
 - mode: standalone local run;
 - editorial preparation: search once, inspect at most one exact arXiv primary PDF, and create at most one schema-valid automatic package;
+- search handoff: pass `--scheduled-outcome-date "$DATE"`; the wrapper consumes the resulting hash-bound private outcome without repeating provider requests;
+- timeout behavior: a provider read timeout is deferred as `no_update`; validation, identity, rights, and other safety failures still fail closed;
 - transaction command: `.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE"` exactly once;
 - output: one concise status summary and the Pages/run links only when deployed;
 - allowed publication action: one non-force commit/push followed by the matching Pages deployment, and only when the daily result is `published` and every wrapper guard passes;

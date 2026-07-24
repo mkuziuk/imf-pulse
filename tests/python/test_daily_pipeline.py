@@ -37,6 +37,12 @@ def _project(tmp_path: Path) -> Path:
     (project / "schemas").mkdir(parents=True)
     source_schema = Path(__file__).resolve().parents[2] / "schemas" / "daily-run-result.schema.json"
     (project / "schemas" / source_schema.name).write_bytes(source_schema.read_bytes())
+    outcome_schema = (
+        Path(__file__).resolve().parents[2]
+        / "schemas"
+        / "external-search-outcome.schema.json"
+    )
+    (project / "schemas" / outcome_schema.name).write_bytes(outcome_schema.read_bytes())
     return project
 
 
@@ -176,7 +182,7 @@ def test_no_update_refreshes_checkpoint_without_creating_a_pulse(tmp_path: Path)
         project, mode="live", run_date=RUN_DATE, dependencies=dependencies
     )
 
-    assert result.status == "no_update"
+    assert result.status == "no_update", result.reason
     assert result.release_id == OLD_RELEASE
     assert result.pulse_path is None
     assert result.artifact_urls == ()
@@ -187,6 +193,46 @@ def test_no_update_refreshes_checkpoint_without_creating_a_pulse(tmp_path: Path)
         "load_context",
         "read_checkpoint",
         "monitor_external",
+        "sync_local",
+        "build_candidate",
+        "analyze_candidate",
+        "publish_candidate",
+    ]
+
+
+def test_scheduled_metadata_timeout_is_deferred_without_a_second_search(
+    tmp_path: Path,
+) -> None:
+    from research_pipeline.external_preflight import write_scheduled_search_outcome
+
+    project = _project(tmp_path)
+    dependencies, calls = _dependencies(
+        project,
+        checkpoint={"release_id": OLD_RELEASE},
+    )
+    outcome_path = write_scheduled_search_outcome(
+        project,
+        run_date=RUN_DATE,
+        as_of=f"{RUN_DATE}T08:00:00+03:00",
+        status="deferred",
+        reason="arxiv query arxiv-iterative-filtering timed out",
+    )
+
+    result = run_daily_pipeline(
+        project,
+        mode="live",
+        run_date=RUN_DATE,
+        dependencies=dependencies,
+        external_search_outcome=outcome_path,
+    )
+
+    assert result.status == "no_update", result.reason
+    assert result.release_id == OLD_RELEASE
+    assert result.checkpoint_refreshed is True
+    assert "temporarily unavailable" in result.reason
+    assert calls == [
+        "load_context",
+        "read_checkpoint",
         "sync_local",
         "build_candidate",
         "analyze_candidate",
@@ -447,6 +493,7 @@ def test_external_stage_keeps_exact_decisions_and_defers_unresolved_metadata(
     batch_path.write_text(
         json.dumps(
             {
+                "id": "external-batch-aaaaaaaaaaaaaaaaaaaa",
                 "candidates": [
                     {"id": pending_id, "candidate_sha256": pending_sha},
                     {"id": approved_id, "candidate_sha256": approved_sha},

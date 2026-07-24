@@ -19,11 +19,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--mode", choices=("live",), required=True)
     parser.add_argument("--date", required=True, help="Europe/Moscow calendar date (YYYY-MM-DD)")
+    parser.add_argument(
+        "--external-search-outcome",
+        help="Private project-relative scheduled metadata-search handoff",
+    )
     args = parser.parse_args(argv)
     result = run_daily_pipeline(
         args.project_root,
         mode=args.mode,
         run_date=args.date,
+        external_search_outcome=args.external_search_outcome,
     )
     print(
         json.dumps(

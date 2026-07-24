@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/external-search-outcome.schema.json",
+  "title": "Private scheduled external-search handoff",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "date",
+    "as_of",
+    "status",
+    "reason",
+    "batch_id",
+    "batch_path",
+    "batch_sha256",
+    "outcome_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "date": {"type": "string", "format": "date"},
+    "as_of": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["ready", "deferred", "failed"]},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "batch_id": {
+      "oneOf": [
+        {"type": "string", "pattern": "^external-batch-[0-9a-f]{20}$"},
+        {"type": "null"}
+      ]
+    },
+    "batch_path": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^data/external/batches/external-batch-[0-9a-f]{20}\\.json$"
+        },
+        {"type": "null"}
+      ]
+    },
+    "batch_sha256": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "outcome_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "ready"}}},
+      "then": {
+        "properties": {
+          "batch_id": {"type": "string"},
+          "batch_path": {"type": "string"},
+          "batch_sha256": {"type": "string"}
+        }
+      },
+      "else": {
+        "properties": {
+          "batch_id": {"type": "null"},
+          "batch_path": {"type": "null"},
+          "batch_sha256": {"type": "null"}
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

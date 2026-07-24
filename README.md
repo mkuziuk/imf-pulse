@@ -134,7 +134,7 @@ The daily research command itself never runs Git. The independent 08:00 `Europe/
   --date "$DATE"
 ```
 
-The scheduled editor searches first, prepares at most one exact automatic package when strong arXiv evidence is available, and then invokes the wrapper. The wrapper requires clean local `main` exactly synchronized with the approved public `origin` and runs the daily transaction once. A `published` result is exported and audited, then only current-date pulse/artifact files, curated knowledge files, and the sealed `public-release/` files may be committed and pushed. The wrapper waits for the matching Pages workflow to succeed. Every other status performs no Git or deployment action. It never force-pushes, tags, opens a pull request, or changes GitHub settings.
+The scheduled editor searches first and writes one ignored, hash-bound search outcome for the date. A successful outcome binds the exact immutable candidate batch used for editorial preparation; a provider timeout records a deferred outcome. The wrapper consumes that outcome instead of repeating the network search, requires clean local `main` exactly synchronized with the approved public `origin`, and runs the daily transaction once. A transient metadata timeout therefore produces a safe `no_update` while local processing and checkpoint refresh continue. A `published` result is exported and audited, then only current-date pulse/artifact files, curated knowledge files, and the sealed `public-release/` files may be committed and pushed. The wrapper waits for the matching Pages workflow to succeed. Every other status performs no Git or deployment action. It never force-pushes, tags, opens a pull request, or changes GitHub settings.
 
 ## Public release and GitHub Pages
 

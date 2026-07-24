@@ -52,6 +52,10 @@ class ExternalMonitoringError(RuntimeError):
     """An external-monitoring safety, integrity, or input error."""
 
 
+class ExternalMetadataTimeout(ExternalMonitoringError):
+    """A provider did not return metadata within the reviewed time limit."""
+
+
 ATOM = "http://www.w3.org/2005/Atom"
 ARXIV = "http://arxiv.org/schemas/atom"
 IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
@@ -581,7 +585,13 @@ def fetch_metadata(
             body = response.read(max_bytes + 1)
     except ExternalMonitoringError:
         raise
-    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+    except TimeoutError as exc:
+        raise ExternalMetadataTimeout(f"metadata request timed out: {exc}") from exc
+    except urllib.error.URLError as exc:
+        if isinstance(exc.reason, TimeoutError):
+            raise ExternalMetadataTimeout(f"metadata request timed out: {exc.reason}") from exc
+        raise ExternalMonitoringError(f"metadata request failed: {exc}") from exc
+    except OSError as exc:
         raise ExternalMonitoringError(f"metadata request failed: {exc}") from exc
     if status != 200:
         raise ExternalMonitoringError(f"metadata endpoint returned HTTP {status}")
@@ -1422,14 +1432,19 @@ def run_external_search(
             sleeper(policy["minimum_request_interval_seconds"])
         request_url = build_metadata_request(config, query, cutoff)
         provider = config["providers"][query["provider"]]
-        response_value = fetch(
-            request_url,
-            timeout_seconds=policy["timeout_seconds"],
-            max_bytes=policy["max_response_bytes"],
-            allowed_hosts=policy["allowed_hosts"],
-            media_types=provider["response_media_types"],
-            user_agent=policy["user_agent"],
-        )
+        try:
+            response_value = fetch(
+                request_url,
+                timeout_seconds=policy["timeout_seconds"],
+                max_bytes=policy["max_response_bytes"],
+                allowed_hosts=policy["allowed_hosts"],
+                media_types=provider["response_media_types"],
+                user_agent=policy["user_agent"],
+            )
+        except ExternalMetadataTimeout as exc:
+            raise ExternalMetadataTimeout(
+                f"{query['provider']} query {query['id']} timed out: {exc}"
+            ) from exc
         if isinstance(response_value, bytes):
             response = FetchedMetadata(
                 response_value,

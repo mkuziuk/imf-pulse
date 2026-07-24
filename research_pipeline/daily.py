@@ -382,17 +382,19 @@ def _default_sync_local(context: DailyContext) -> SnapshotOutcome:
     return SnapshotOutcome(manifest.snapshot_id, directory, created)
 
 
-def _default_monitor_external(context: DailyContext) -> ExternalOutcome:
+def _external_outcome_from_batch(
+    context: DailyContext,
+    batch_relative: str,
+    *,
+    expected_batch_id: str | None = None,
+    expected_batch_sha256: str | None = None,
+) -> ExternalOutcome:
     from .external import (
         lookup_review_decision,
-        run_external_search,
         validate_batch_integrity,
     )
 
-    config_path = context.project_root / "config" / "external-sources.yaml"
-    as_of = f"{context.date}T08:00:00+03:00"
-    result = run_external_search(config_path, context.project_root, as_of)
-    batch_relative = _safe_relative(str(result["batch_path"]), "external batch path")
+    batch_relative = _safe_relative(batch_relative, "external batch path")
     with open_regular_file_under_root(context.project_root, batch_relative) as descriptor:
         chunks: list[bytes] = []
         while True:
@@ -407,6 +409,13 @@ def _default_monitor_external(context: DailyContext) -> ExternalOutcome:
     if not isinstance(batch, Mapping):
         raise PublicationError("external batch is not an object")
     validate_batch_integrity(batch)
+    if expected_batch_id is not None and batch.get("id") != expected_batch_id:
+        raise PublicationError("external preflight batch id does not match content")
+    if (
+        expected_batch_sha256 is not None
+        and batch.get("batch_sha256") != expected_batch_sha256
+    ):
+        raise PublicationError("external preflight batch hash does not match content")
     policy = context.external_config.get("policy")
     if not isinstance(policy, Mapping):
         raise PublicationError("external policy is unavailable after preflight")
@@ -449,8 +458,22 @@ def _default_monitor_external(context: DailyContext) -> ExternalOutcome:
         rejected_candidate_ids=tuple(sorted(rejected)),
         discovered_candidate_ids=tuple(sorted(pending)),
         candidate_records=tuple(dict(candidate) for candidate in candidates),
-        batch_id=str(result.get("batch_id")) if result.get("batch_id") else None,
+        batch_id=str(batch.get("id")) if batch.get("id") else None,
         review_path=batch_relative if candidates else None,
+    )
+
+
+def _default_monitor_external(context: DailyContext) -> ExternalOutcome:
+    from .external import run_external_search
+
+    config_path = context.project_root / "config" / "external-sources.yaml"
+    as_of = f"{context.date}T08:00:00+03:00"
+    result = run_external_search(config_path, context.project_root, as_of)
+    batch_relative = _safe_relative(str(result["batch_path"]), "external batch path")
+    return _external_outcome_from_batch(
+        context,
+        batch_relative,
+        expected_batch_id=str(result.get("batch_id")),
     )
 
 
@@ -1024,6 +1047,7 @@ def run_daily_pipeline(
     mode: str,
     run_date: str,
     dependencies: DailyDependencies | None = None,
+    external_search_outcome: str | None = None,
 ) -> DailyRunResult:
     """Run at most one report transaction and always return a safe result."""
 
@@ -1038,8 +1062,32 @@ def run_daily_pipeline(
         with _daily_lock(context.project_root):
             checkpoint = dependencies.read_checkpoint(context)
             next_pulse_index = _next_pulse_index(checkpoint, context.date)
-            external = dependencies.monitor_external(context)
-            if using_default_dependencies:
+            external_deferred_reason: str | None = None
+            if external_search_outcome is not None:
+                from .external_preflight import load_scheduled_search_outcome
+
+                preflight = load_scheduled_search_outcome(
+                    context.project_root,
+                    external_search_outcome,
+                    run_date=context.date,
+                )
+                if preflight["status"] == "deferred":
+                    external = ExternalOutcome()
+                    external_deferred_reason = str(preflight["reason"])
+                if preflight["status"] == "failed":
+                    raise PublicationError(
+                        f"scheduled external metadata preflight failed: {preflight['reason']}"
+                    )
+                if preflight["status"] == "ready":
+                    external = _external_outcome_from_batch(
+                        context,
+                        str(preflight["batch_path"]),
+                        expected_batch_id=str(preflight["batch_id"]),
+                        expected_batch_sha256=str(preflight["batch_sha256"]),
+                    )
+            else:
+                external = dependencies.monitor_external(context)
+            if using_default_dependencies and external_deferred_reason is None:
                 from .automatic import load_and_materialize_automatic_package
 
                 automatic = load_and_materialize_automatic_package(
@@ -1123,6 +1171,11 @@ def run_daily_pipeline(
                     if advanced
                     else "no material development was selected; the accepted report was retained"
                 )
+                if external_deferred_reason is not None:
+                    reason += (
+                        "; external metadata was temporarily unavailable and was deferred: "
+                        f"{external_deferred_reason}"
+                    )
                 result = _result(
                     status="no_update",
                     run_date=context.date,

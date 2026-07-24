@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import stat
 import subprocess
@@ -13,6 +14,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping, Sequence
 
 from .config import load_yaml
+from .external_preflight import scheduled_outcome_path
 from .pulse_identity import parse_pulse_path
 from .validation import validate_records
 
@@ -447,19 +449,27 @@ def run_scheduled_pipeline(
         publication = _publication_policy(project_root)
         base_head = _git_preflight(runner, project_root, publication)
         python = project_root / ".venv" / "bin" / "python"
+        daily_command = [
+            str(python),
+            "scripts/run_daily_pipeline.py",
+            "--project-root",
+            str(project_root),
+            "--mode",
+            "live",
+            "--date",
+            run_date,
+        ]
+        preflight_relative = scheduled_outcome_path(run_date)
+        try:
+            os.lstat(project_root / preflight_relative)
+        except FileNotFoundError:
+            pass
+        else:
+            daily_command.extend(("--external-search-outcome", preflight_relative))
         completed = _run(
             runner,
             project_root,
-            (
-                str(python),
-                "scripts/run_daily_pipeline.py",
-                "--project-root",
-                str(project_root),
-                "--mode",
-                "live",
-                "--date",
-                run_date,
-            ),
+            tuple(daily_command),
             timeout=3600,
             expected=(0, 2),
         )

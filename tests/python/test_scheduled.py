@@ -214,6 +214,29 @@ def test_no_update_never_reaches_git_publication(tmp_path: Path, repository_root
     assert not any(command[:3] == ("gh", "run", "list") for command in runner.calls)
 
 
+def test_existing_preflight_outcome_is_passed_to_daily_without_a_second_search(
+    tmp_path: Path, repository_root: Path
+) -> None:
+    project = _scheduled_project(tmp_path, repository_root)
+    outcome = project / "data" / "automatic" / "external-search-outcomes" / f"{RUN_DATE}.json"
+    outcome.parent.mkdir(parents=True)
+    outcome.write_text("{}\n", encoding="utf-8")
+    runner = FakeRunner(project, _daily("no_update"))
+
+    result = run_scheduled_pipeline(project, run_date=RUN_DATE, runner=runner)
+
+    assert result.status == "no_update"
+    daily_command = next(
+        command
+        for command in runner.calls
+        if len(command) > 1 and command[1] == "scripts/run_daily_pipeline.py"
+    )
+    assert daily_command[-2:] == (
+        "--external-search-outcome",
+        f"data/automatic/external-search-outcomes/{RUN_DATE}.json",
+    )
+
+
 def test_published_result_uses_guarded_commit_and_waits_for_pages(
     tmp_path: Path, repository_root: Path
 ) -> None:
