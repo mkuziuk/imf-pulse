@@ -5,7 +5,7 @@ Status: accepted
 
 ## Context
 
-The daily research transaction already runs the expensive Python, frontend, and production-build gates before advancing its private checkpoint. Repeating the complete Python suite on GitHub for a pulse-only commit made Pages publication unnecessarily slow. At the same time, allowing a general-purpose scheduled agent to run arbitrary Git commands would weaken the source, review, and public-release boundaries.
+The daily research transaction already runs the expensive Python, frontend, and production-build gates before advancing its private checkpoint. Repeating the complete Python suite on GitHub for a pulse-only commit made Pages publication unnecessarily slow. At the same time, allowing a general-purpose scheduled agent to run arbitrary Git commands would weaken the source, evidence, and public-release boundaries.
 
 ## Decision
 

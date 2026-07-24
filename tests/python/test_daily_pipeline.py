@@ -194,7 +194,7 @@ def test_no_update_refreshes_checkpoint_without_creating_a_pulse(tmp_path: Path)
     ]
 
 
-def test_pending_external_candidates_stop_before_extraction_or_publication(
+def test_unresolved_external_candidates_are_deferred_without_blocking(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
@@ -212,16 +212,22 @@ def test_pending_external_candidates_stop_before_extraction_or_publication(
         project, mode="live", run_date=RUN_DATE, dependencies=dependencies
     )
 
-    assert result.status == "review_required"
-    assert result.pending_review_count == 1
+    assert result.status == "no_update"
+    assert result.pending_review_count == 0
     assert result.release_advanced is False
-    assert result.checkpoint_refreshed is False
-    assert "sync_local" not in calls
-    assert "build_candidate" not in calls
-    assert "publish_candidate" not in calls
+    assert result.checkpoint_refreshed is True
+    assert calls == [
+        "load_context",
+        "read_checkpoint",
+        "monitor_external",
+        "sync_local",
+        "build_candidate",
+        "analyze_candidate",
+        "publish_candidate",
+    ]
 
 
-def test_material_change_without_reviewed_proposal_does_not_fabricate_report(
+def test_material_local_change_without_automatic_package_advances_without_report(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
@@ -244,18 +250,24 @@ def test_material_change_without_reviewed_proposal_does_not_fabricate_report(
         checkpoint={"release_id": OLD_RELEASE},
         candidate=candidate,
         analysis=analysis,
+        publish=PublishResult(
+            NEW_RELEASE, "run-test-advanced", "processed_no_pulse", True
+        ),
     )
 
     result = run_daily_pipeline(
         project, mode="live", run_date=RUN_DATE, dependencies=dependencies
     )
 
-    assert result.status == "review_required"
+    assert result.status == "no_update"
     assert result.release_id == NEW_RELEASE
-    assert result.pending_review_path == f"data/review/pulse-proposals/{RUN_DATE}.json"
+    assert result.pending_review_path is None
+    assert result.release_advanced is True
+    assert result.checkpoint_refreshed is True
     assert result.pulse_path is None
+    assert "load_proposal" in calls
     assert "build_pulse" not in calls
-    assert "publish_candidate" not in calls
+    assert "publish_candidate" in calls
 
 
 def test_reviewed_material_change_publishes_exactly_one_pulse_and_artifact(
@@ -414,7 +426,7 @@ def test_pulse_output_refuses_symlinked_content_parent(tmp_path: Path) -> None:
     assert list(outside.iterdir()) == []
 
 
-def test_external_stage_uses_exact_hash_decisions_and_keeps_pending_review(
+def test_external_stage_keeps_exact_decisions_and_defers_unresolved_metadata(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     project = _project(tmp_path)
@@ -469,9 +481,14 @@ def test_external_stage_uses_exact_hash_decisions_and_keeps_pending_review(
 
     outcome = _default_monitor_external(context)
 
-    assert outcome.pending_candidate_ids == (pending_id,)
+    assert outcome.pending_candidate_ids == ()
+    assert outcome.discovered_candidate_ids == (pending_id,)
     assert outcome.approved_candidate_ids == (approved_id,)
     assert outcome.review_path == batch_relative
+    assert tuple(row["id"] for row in outcome.candidate_records) == (
+        pending_id,
+        approved_id,
+    )
 
 
 @pytest.mark.parametrize(

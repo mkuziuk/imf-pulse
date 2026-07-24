@@ -99,7 +99,7 @@ Run the configured arXiv and Crossref literature queries at a deterministic cuto
   --as-of 2026-07-23T08:00:00+03:00
 ```
 
-The command writes private immutable Atom or JSON receipts beneath `tmp/external-receipts/` and a normalized batch beneath `data/external/batches/`. It does not copy abstracts into the batch or download PDFs, supplementary files, or code. A result with `candidates_pending_review` cannot become evidence automatically. An unresolved exact candidate is carried into later batches; once its exact hash has an approval or rejection, that record is deduplicated.
+The command writes private immutable Atom or JSON receipts beneath `tmp/external-receipts/` and a normalized batch beneath `data/external/batches/`. It does not copy abstracts into the batch or download PDFs, supplementary files, or code. Metadata is discovery material only. An unresolved exact candidate is carried into later batches without blocking the daily transaction; once its exact hash has an approval or rejection, that record is deduplicated.
 
 The configured horizon deliberately spans arXiv's operating history and up to 100 years of Crossref metadata. Small per-query result caps still bound every run. Treat an older work as newly discovered by this project, never as newly published or intrinsically novel.
 
@@ -119,7 +119,21 @@ Review one exact candidate version by copying its batch path, ID, and SHA-256 fr
   --reuse-status unknown
 ```
 
-Use `--decision rejected` when appropriate. Add `--public-distribution` only when the recorded reuse status is `cleared` or `public_domain`. Decisions append to `data/review/external-decisions.jsonl`, bind the exact candidate hash, and cannot be edited or duplicated. Approval permits further review only; it does not extract the paper, accept claims, or publish a pulse.
+Use `--decision rejected` when appropriate. Add `--public-distribution` only when the recorded reuse status is `cleared` or `public_domain`. Decisions append to `data/review/external-decisions.jsonl`, bind the exact candidate hash, and cannot be edited or duplicated. Approval permits further manual review only; it does not extract the paper, accept claims, or publish a pulse.
+
+### Automatic arXiv evidence path
+
+The unattended editor may choose at most one exact arXiv candidate and fetch its official primary PDF into private ignored storage:
+
+```bash
+.venv/bin/python scripts/fetch_arxiv_evidence.py \
+  --project-root "$PROJECT_ROOT" \
+  --batch "$PROJECT_ROOT/data/external/batches/BATCH.json" \
+  --candidate-id CANDIDATE_ID \
+  --candidate-sha256 CANDIDATE_SHA256
+```
+
+The helper rejects non-arXiv candidates, redirects, oversized responses, unexpected content types, and non-PDF bytes. The editor then follows `prompts/automatic-editor.md` and writes one ignored `data/automatic/packages/YYYY-MM-DD.json` conforming to `schemas/automatic-pulse-package.schema.json`. `research_pipeline/automatic.py` revalidates the exact candidate, private PDF hash and structure, page extracts, evidence links, append-only knowledge, deterministic novelty fingerprints, pulse text, and diagram before any accepted file changes. Do not put PDFs or extracted page text in Git or `public-release/`.
 
 Compare manually prepared controlled knowledge profiles with:
 
@@ -145,13 +159,13 @@ DATE="$(TZ=Europe/Moscow date +%F)"
   --date "$DATE"
 ```
 
-Do not call synchronization, search, analysis, rendering, or publication piecemeal during the same scheduled run. The transaction owns the lock and checkpoint sequence. It checks external literature before copying local IMF context; an unresolved literature candidate stops the run at `review_required`.
+The scheduled editor performs metadata search and, when justified, prepares one automatic package before calling the transaction. Do not call synchronization, analysis, rendering, or publication piecemeal around that call. The transaction owns the lock and checkpoint sequence. Unresolved metadata is deferred; only a completely verified package can contribute external evidence.
 
 The command emits one JSON result:
 
-- `published`: exactly one reviewed pulse passed every gate; `pulse_path` is present.
+- `published`: exactly one automatically verified or manually reviewed pulse passed every gate; `pulse_path` is present.
 - `no_update`: no material development was selected; no pulse or placeholder artifact was created.
-- `review_required`: inspect `pending_review_path`; the accepted release is not advanced for that pending decision.
+- `review_required`: a legacy or injected manual dependency requested review; production discovery itself does not use this as a blocker.
 - `blocked`: a required executable, reviewed policy, live source root, or safe permission is missing.
 - `failed`: processing or a validation gate failed; do not bypass the gate.
 
@@ -164,10 +178,11 @@ The Codex desktop scheduled task is configured outside the repository with these
 - schedule: daily at 08:00 `Europe/Moscow`;
 - target: `$PROJECT_ROOT`;
 - mode: standalone local run;
-- command: `.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE"` exactly once;
+- editorial preparation: search once, inspect at most one exact arXiv primary PDF, and create at most one schema-valid automatic package;
+- transaction command: `.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE"` exactly once;
 - output: one concise status summary and the Pages/run links only when deployed;
 - allowed publication action: one non-force commit/push followed by the matching Pages deployment, and only when the daily result is `published` and every wrapper guard passes;
-- forbidden actions: source-repository writes, permission widening, code execution from sources, automatic external approval, Git activity for any other status, tags, PRs, force-pushes, and hosting-setting changes.
+- forbidden actions: source-repository writes, permission widening, code execution from sources, use of Sci-Hub or untrusted full text, Git activity for any other status, tags, PRs, force-pushes, and hosting-setting changes.
 
 `config/pulse.yaml` records the approved schedule and safety prerequisites but does not install the task. Test the exact scheduled prompt manually in an independent local run before enabling or changing it. Codex desktop availability is required for an app-local scheduled task.
 

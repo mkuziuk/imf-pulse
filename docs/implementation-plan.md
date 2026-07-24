@@ -1,6 +1,6 @@
 # Implemented Phase 1–5 architecture
 
-The Residual remains a file-based local MVP. It has no application server, database, vector index, broad crawler, or automatic paper ingestion. Its only unattended publisher is the fail-closed, published-only wrapper described below.
+The Residual remains a file-based local MVP. It has no application server, database, vector index, or broad crawler. Its narrow automatic evidence path handles at most one exact official arXiv PDF per pulse; its only unattended publisher is the fail-closed, published-only wrapper described below.
 
 ## Phase 1 — editorial site and artifact rendering
 
@@ -23,7 +23,7 @@ The Residual remains a file-based local MVP. It has no application server, datab
 ## Phase 3 — deterministic novelty and daily proposals
 
 - `research_pipeline/novelty.py` compares two immutable releases, classifies source and knowledge changes, ranks evidence-backed additions with deterministic integer scoring, flags contradictions and target drift, deduplicates prior proposal fingerprints, and selects no more than three signals.
-- Change outcomes are `no_update`, `review_required`, or `selected`. Deletions, modified accepted objects, unevidenced additions, source-only changes, and bootstrap ambiguity are never silently promoted.
+- Change outcomes are `no_update`, `review_required`, or `selected`. Deletions, modified accepted objects, unevidenced additions, and bootstrap ambiguity are never silently promoted. Source-only local changes can advance the evidence release without forcing a report.
 - `schemas/change-analysis.schema.json` and `schemas/pulse-proposal.schema.json` define the review objects.
 - `research_pipeline/pulse_builder.py` validates a reviewed proposal bound to the exact analysis/release and renders one immutable 350–650 word Markdown pulse with exactly one artifact. It refuses overwrite.
 - `scripts/build_daily_pulse.py` writes deterministic analysis and can render an already reviewed proposal. It does not generate, approve, or publish prose by itself.
@@ -33,19 +33,19 @@ The Residual remains a file-based local MVP. It has no application server, datab
 
 - `config/external-sources.yaml` fixes reviewed arXiv and Crossref HTTPS endpoints, allowed hosts, query vocabulary, publication types, century-scale historical discovery windows, result limits, response size, timeout, and receipt/review paths.
 - `research_pipeline/external.py` parses arXiv XML with DTD/entity rejection and strict Crossref JSON, normalizes provider identities, writes immutable private receipts and hash-bound candidate batches, and never exposes a full-text download or code-execution path.
-- `scripts/search_external_sources.py --as-of ...` performs deterministic discovery. New candidates are pending, never accepted evidence.
+- `scripts/search_external_sources.py --as-of ...` performs deterministic discovery. New candidates are deferred metadata, never accepted evidence by themselves.
 - `scripts/review_external_source.py` appends one explicit `approved` or `rejected` decision bound to the batch, candidate ID, candidate SHA-256, reviewer, timestamp, rationale, and rights record. Existing decisions cannot be replaced.
 - `scripts/compare_knowledge.py` compares manually prepared controlled profiles. It reports different definitions, different targets, exact-scope contradictions, and missing/scope review gaps; every finding still requires review.
 - `schemas/external-{candidate,batch,decision}.schema.json` and `schemas/comparison-finding.schema.json` define these records.
 
-Published papers, scholarly books, and chapters precede preprints and local research in the review queue. External approval does not download a work, extract claims, edit curated knowledge, or publish a pulse. Those remain explicit review steps.
+Published papers, scholarly books, and chapters precede preprints and local research in discovery. Manual approval does not download a work, extract claims, edit curated knowledge, or publish a pulse. The separate automatic path in `research_pipeline/automatic.py` accepts only one exact official arXiv PDF, validates page-level evidence and append-only records, and rolls every materialized file back on failure.
 
 ## Phase 5 — one local daily transaction and scheduling contract
 
 - `research_pipeline/daily.py` and `scripts/run_daily_pipeline.py` provide the single `--mode live --date YYYY-MM-DD` transaction.
-- Preflight requires the reviewed source, external, report, extraction, and scheduling policies. The command acquires a non-blocking local lock, reads the checkpoint, monitors literature first, and stops for external review before copying local bytes. When no literature decision is pending, it syncs allowlisted local context, builds a candidate release, performs novelty analysis, requires exact review objects, and invokes the existing atomic publisher.
+- Preflight requires the source, external, report, extraction, automatic-editorial, and scheduling policies. The command acquires a non-blocking local lock, reads the checkpoint, monitors literature first, defers unresolved metadata, syncs allowlisted local context, validates any exact automatic package, builds a candidate release, performs novelty analysis, and invokes the existing atomic publisher.
 - The stable result contract is `published`, `no_update`, `review_required`, `blocked`, or `failed`, with run/release identity, checkpoint effects, evidence IDs, and pending-review path.
-- Pending external candidates stop the run at `review_required`. A selected local development without its exact reviewed pulse proposal also stops at `review_required`. No-update runs create no report.
+- Pending external candidates never stop the run. A verified package must match the exact deterministic selection; otherwise it fails closed. A local evidence change without a selected package advances without a pulse. No-update runs create no report.
 - The Codex desktop scheduled task runs independently at 08:00 `Europe/Moscow` in local mode and invokes `scripts/run_scheduled_pipeline.py` once.
 - The wrapper validates the daily JSON result. Only `published` can pass clean-branch, synchronized-origin, exact-path, public-export, and public-audit gates before one non-force commit/push and a wait for the matching Pages workflow.
 - Every other result performs no Git operation. The wrapper cannot tag, open a pull request, force-push, change hosting settings, or modify the sibling source repository.
@@ -66,7 +66,8 @@ The scheduling declaration in `config/pulse.yaml` is a reviewed policy prerequis
 - `data/releases/` — private immutable validated research and publication releases.
 - `data/current.json` — the sole accepted-release checkpoint.
 - `data/runs/` — immutable local publication outcomes.
-- `data/review/` — change analyses, pulse proposals, and append-only external decisions.
+- `data/review/` — change analyses, manual pulse proposals, and append-only external decisions.
+- `data/automatic/` — ignored exact-hash editorial packages and private page extracts.
 - `tmp/external-receipts/` — private immutable provider responses.
 - `data/external/batches/` — normalized metadata candidate queues.
 - `public-release/` — the only research-content input authorized for public builds.

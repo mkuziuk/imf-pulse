@@ -1,11 +1,10 @@
 """One conservative, transactional entry point for a daily Residual run.
 
-The orchestration deliberately keeps discovery, review, report rendering, and
-publication separate.  External metadata is never evidence until an exact
-candidate hash has an append-only approval decision.  A material local change
-is never turned into prose unless a reviewed structured proposal is bound to
-the exact novelty analysis.  ``publish_release`` remains the sole checkpoint
-writer and therefore the final commit point.
+Discovery never blocks the day. An optional automatic editorial package is
+accepted only when it binds an exact candidate hash, a safely parsed primary
+PDF, page-level evidence, append-only knowledge, and deterministic novelty.
+Anything uncertain is skipped rather than published. ``publish_release``
+remains the sole checkpoint writer and therefore the final commit point.
 """
 
 from __future__ import annotations
@@ -87,6 +86,8 @@ class ExternalOutcome:
     pending_candidate_ids: tuple[str, ...] = ()
     approved_candidate_ids: tuple[str, ...] = ()
     rejected_candidate_ids: tuple[str, ...] = ()
+    discovered_candidate_ids: tuple[str, ...] = ()
+    candidate_records: tuple[Mapping[str, Any], ...] = ()
     batch_id: str | None = None
     review_path: str | None = None
 
@@ -304,10 +305,25 @@ def _default_load_context(project_root: Path, mode: str, run_date: str) -> Daily
         )
     external_enablement = pulse.get("external_monitoring")
     if not isinstance(external_enablement, Mapping) or (
-        external_enablement.get("require_source_approval") is not True
+        external_enablement.get("require_source_approval") is not False
+        or external_enablement.get("unresolved_candidate_action") != "defer"
         or external_enablement.get("download_or_execute_code") is not False
     ):
-        raise DailyBlockedError("external monitoring must require review and forbid code retrieval or execution")
+        raise DailyBlockedError(
+            "external monitoring must defer unresolved metadata and forbid code retrieval or execution"
+        )
+    automatic_editorial = external_enablement.get("automatic_editorial")
+    if not isinstance(automatic_editorial, Mapping) or automatic_editorial != {
+        "enabled": True,
+        "mode": "automatic_fail_closed",
+        "model": "gpt-5.6-sol",
+        "maximum_sources_per_pulse": 1,
+        "allowed_primary_evidence_hosts": ["arxiv.org"],
+        "require_primary_pdf": True,
+        "require_page_locators": True,
+        "publish_only_when_verified": True,
+    }:
+        raise DailyBlockedError("automatic editorial policy is missing or has expanded authority")
     report = pulse.get("report")
     if not isinstance(report, Mapping) or report.get("create_when_no_material_change") is not False:
         raise DailyBlockedError("no-update report fabrication must be explicitly disabled")
@@ -420,11 +436,15 @@ def _default_monitor_external(context: DailyContext) -> ExternalOutcome:
         else:
             raise PublicationError("external review decision is malformed")
     return ExternalOutcome(
-        pending_candidate_ids=tuple(sorted(pending)),
+        # Discovery is non-blocking. Undecided metadata remains available to
+        # the automatic editor but is not evidence and is never auto-approved.
+        pending_candidate_ids=(),
         approved_candidate_ids=tuple(sorted(approved)),
         rejected_candidate_ids=tuple(sorted(rejected)),
+        discovered_candidate_ids=tuple(sorted(pending)),
+        candidate_records=tuple(dict(candidate) for candidate in candidates),
         batch_id=str(result.get("batch_id")) if result.get("batch_id") else None,
-        review_path=batch_relative if pending else None,
+        review_path=batch_relative if candidates else None,
     )
 
 
@@ -966,72 +986,66 @@ def run_daily_pipeline(
 ) -> DailyRunResult:
     """Run at most one report transaction and always return a safe result."""
 
+    using_default_dependencies = dependencies is None
     dependencies = dependencies or default_dependencies()
     provisional_run_id = f"daily-{uuid.uuid4().hex}"
     candidate: CandidateOutcome | None = None
+    automatic: Any | None = None
     normalized_root = project_root.resolve()
     try:
         context = dependencies.load_context(project_root, mode, run_date)
         with _daily_lock(context.project_root):
             checkpoint = dependencies.read_checkpoint(context)
             external = dependencies.monitor_external(context)
-            if external.pending_candidate_ids:
-                result = _result(
-                    status="review_required",
-                    run_date=context.date,
-                    run_id=provisional_run_id,
-                    release_id=(
-                        str(checkpoint.get("release_id")) if checkpoint else None
-                    ),
-                    reason="external metadata candidates require exact-hash review",
-                    evidence_ids=external.pending_candidate_ids,
-                    pending_review_count=len(external.pending_candidate_ids),
-                    pending_review_path=external.review_path,
+            if using_default_dependencies:
+                from .automatic import load_and_materialize_automatic_package
+
+                automatic = load_and_materialize_automatic_package(
+                    context.project_root,
+                    context.date,
+                    batch_id=external.batch_id,
+                    candidates=external.candidate_records,
                 )
-                _validate_result(context.project_root, result)
-                return result
 
             snapshot = dependencies.sync_local(context)
             candidate = dependencies.build_candidate(context, snapshot)
             analysis = dependencies.analyze_candidate(context, checkpoint, candidate)
             external_evidence = external.approved_candidate_ids
-            if analysis.status == "review_required":
-                result = _result(
-                    status="review_required",
-                    run_date=context.date,
-                    run_id=provisional_run_id,
-                    release_id=candidate.release_id,
-                    reason=analysis.reason,
-                    evidence_ids=(*analysis.evidence_ids, *external_evidence),
-                    pending_review_count=1,
-                    pending_review_path=analysis.review_path,
-                )
-                _validate_result(context.project_root, result)
-                return result
 
             pulse: PulseOutcome | None = None
             if analysis.status == "selected":
-                proposal = dependencies.load_proposal(context, candidate, analysis)
-                if proposal is None:
-                    result = _result(
-                        status="review_required",
+                proposal = (
+                    automatic.proposal(
                         run_date=context.date,
-                        run_id=provisional_run_id,
                         release_id=candidate.release_id,
-                        reason=(
-                            "material changes were selected, but their hash-bound pulse "
-                            "proposal has not been reviewed"
+                        analysis=analysis.analysis,
+                        schema_path=(
+                            context.project_root
+                            / "schemas"
+                            / "pulse-proposal.schema.json"
                         ),
-                        evidence_ids=(*analysis.evidence_ids, *external_evidence),
-                        pending_review_count=1,
-                        pending_review_path=analysis.review_path,
                     )
-                    _validate_result(context.project_root, result)
-                    return result
-                pulse = dependencies.build_pulse(context, proposal)
-                _validate_pulse_outcome(context, pulse)
+                    if automatic is not None and analysis.analysis is not None
+                    else dependencies.load_proposal(context, candidate, analysis)
+                )
+                if proposal is not None:
+                    if automatic is not None:
+                        automatic.capture(
+                            context.project_root / "content" / "pulses" / f"{context.date}.md"
+                        )
+                    pulse = dependencies.build_pulse(context, proposal)
+                    _validate_pulse_outcome(context, pulse)
+            elif analysis.status == "review_required":
+                # Ambiguous local changes are retained as an evidence release
+                # without a report. They do not block the operator.
+                pulse = None
             elif analysis.status != "no_update":
                 raise PublicationError("novelty analysis returned an invalid status")
+
+            if automatic is not None and pulse is None:
+                raise PublicationError(
+                    "automatic editorial package did not produce an exact selected pulse"
+                )
 
             published = dependencies.publish_candidate(context, candidate, pulse)
             if pulse is not None:
@@ -1046,13 +1060,15 @@ def run_daily_pipeline(
                     artifact_urls=pulse.artifact_manifest_urls,
                     release_advanced=True,
                     checkpoint_refreshed=True,
-                    reason="one reviewed, evidence-backed pulse passed every release gate",
+                    reason="one automatically verified, evidence-backed pulse passed every release gate",
                     evidence_ids=(
                         *analysis.evidence_ids,
                         *pulse.evidence_ids,
                         *external.approved_candidate_ids,
                     ),
                 )
+                if automatic is not None:
+                    automatic.committed = True
             else:
                 if published.status not in {"unchanged", "processed_no_pulse"}:
                     raise PublicationError("no-update publication returned an invalid status")
@@ -1079,6 +1095,8 @@ def run_daily_pipeline(
             _validate_result(context.project_root, result)
             return result
     except (DailyBlockedError, ConfigurationError, SnapshotError) as exc:
+        if automatic is not None:
+            automatic.rollback()
         result = _result(
             status="blocked",
             run_date=run_date if re.fullmatch(r"\d{4}-\d{2}-\d{2}", run_date) else "1970-01-01",
@@ -1087,6 +1105,8 @@ def run_daily_pipeline(
             reason=_safe_reason(exc, normalized_root),
         )
     except BaseException as exc:
+        if automatic is not None:
+            automatic.rollback()
         result = _result(
             status="failed",
             run_date=run_date if re.fullmatch(r"\d{4}-\d{2}-\d{2}", run_date) else "1970-01-01",

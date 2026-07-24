@@ -26,7 +26,7 @@ PUBLIC_KNOWLEDGE = {
     "relationships.jsonl",
     "sources.jsonl",
 }
-CURATED_KNOWLEDGE = PUBLIC_KNOWLEDGE - {"sources.jsonl"}
+CURATED_KNOWLEDGE = PUBLIC_KNOWLEDGE
 
 
 class ScheduledPublishError(RuntimeError):

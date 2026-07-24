@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { withAppUrl } from "../lib/links";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
 describe("MarkdownRenderer", () => {
@@ -29,7 +30,7 @@ $$e_k = W_k\\varepsilon.$$
     expect(screen.getByRole("table")).toBeVisible();
     expect(screen.getByRole("link", { name: "IMF.pdf, p. 6" })).toHaveAttribute(
       "href",
-      "/sources#src-imf-draft"
+      withAppUrl("/sources#src-imf-draft")
     );
   });
 

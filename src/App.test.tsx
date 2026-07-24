@@ -40,7 +40,8 @@ describe("application routes", () => {
     const headings = within(screen.getByRole("main")).getAllByRole("heading", { level: 1 });
     expect(headings).toHaveLength(1);
     expect(headings[0]).toBeVisible();
-    expect(headings[0]).toHaveTextContent(/The Calligraphic Gap|No validated pulse has been published/i);
+    expect(headings[0]).not.toHaveTextContent(/get started|learn more/i);
+    expect(headings[0].textContent?.trim()).not.toBe("");
   });
 
   it("does not call a timestamp-free validated build an absent pointer", () => {

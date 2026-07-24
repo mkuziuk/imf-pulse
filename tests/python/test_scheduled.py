@@ -45,6 +45,7 @@ def test_allowlist_is_date_scoped_and_exact() -> None:
         f"content/pulses/{RUN_DATE}.md",
         f"public/artifacts/{RUN_DATE}/chart/chart.svg",
         "knowledge/curated/claims.jsonl",
+        "knowledge/curated/sources.jsonl",
         "public-release/current.json",
         "public-release/manifest.json",
         "public-release/knowledge/sources.jsonl",
@@ -53,7 +54,6 @@ def test_allowlist_is_date_scoped_and_exact() -> None:
     ]
     assert all(_allowed_change(path, RUN_DATE) for path in allowed)
     assert not _allowed_change("config/pulse.yaml", RUN_DATE)
-    assert not _allowed_change("knowledge/curated/sources.jsonl", RUN_DATE)
     assert not _allowed_change("content/pulses/2026-07-22.md", RUN_DATE)
     assert not _allowed_change(f"public/artifacts/{RUN_DATE}/../secret", RUN_DATE)
 

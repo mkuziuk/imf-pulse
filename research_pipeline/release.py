@@ -339,6 +339,72 @@ def _enforce_append_only_knowledge(
         )
 
 
+def _load_curated_external_sources(
+    project_root: Path,
+    knowledge_directory: Path,
+    snapshot_id: str,
+    schemas_directory: Path,
+    local_source_ids: set[str],
+) -> tuple[list[dict[str, Any]], list[ExtractionResult], bytes]:
+    """Load reviewed external source records and their private static extracts.
+
+    Bibliographic records are safe to publish, while extracted paper text stays
+    beneath the ignored ``data/automatic/extracts`` boundary. Every release
+    still binds the exact source hash and static page units.
+    """
+
+    path = knowledge_directory / "sources.jsonl"
+    payload = path.read_bytes() if path.exists() else b""
+    records = _parse_curated_jsonl(payload, "sources.jsonl")
+    if not records:
+        return [], [], payload
+    validate_records(records, schemas_directory / "source.schema.json", "curated sources")
+    external_sources: list[dict[str, Any]] = []
+    extractions: list[ExtractionResult] = []
+    for record in records:
+        source_id = record["id"]
+        if source_id in local_source_ids:
+            raise PublicationError(f"curated external source collides with local source: {source_id}")
+        extract_path = project_root / "data" / "automatic" / "extracts" / f"{source_id}.jsonl"
+        if extract_path.is_symlink() or not extract_path.is_file():
+            raise PublicationError(f"curated external source has no private extract: {source_id}")
+        units = tuple(read_jsonl(extract_path))
+        validate_records(units, schemas_directory / "extract.schema.json", f"automatic extract {source_id}")
+        source_sha = record.get("content_sha256")
+        if not units or any(
+            unit.get("source_id") != source_id
+            or unit.get("source_sha256") != source_sha
+            for unit in units
+        ):
+            raise PublicationError(f"curated external extract identity mismatch: {source_id}")
+        semantic_sha = canonical_json_hash(
+            [
+                {
+                    key: value
+                    for key, value in unit.items()
+                    if key not in {"id", "source_id", "source_sha256", "schema_version"}
+                }
+                for unit in units
+            ]
+        )
+        if record.get("extract_semantic_sha256") != semantic_sha:
+            raise PublicationError(f"curated external extract semantic hash mismatch: {source_id}")
+        release_record = dict(record)
+        release_record["snapshot_id"] = snapshot_id
+        external_sources.append(release_record)
+        extractions.append(
+            ExtractionResult(
+                source_id=source_id,
+                source_sha256=str(source_sha),
+                extractor=str(record.get("extractor")),
+                semantic_sha256=semantic_sha,
+                units=units,
+                warnings=(),
+            )
+        )
+    return external_sources, extractions, payload
+
+
 def build_release_candidate(
     project_root: Path,
     config: PipelineConfig,
@@ -461,6 +527,18 @@ def build_release_candidate(
                 )
             )
 
+    external_sources, external_extractions, curated_source_payload = (
+        _load_curated_external_sources(
+            project_root,
+            knowledge_directory,
+            snapshot.snapshot_id,
+            schemas_directory,
+            set(source_by_id),
+        )
+    )
+    source_records.extend(external_sources)
+    extraction_results.extend(external_extractions)
+
     curated_payloads: dict[str, bytes] = {}
     curated_records: dict[str, list[dict[str, Any]]] = {}
     for filename in ("claims.jsonl", "methods.jsonl", "experiments.jsonl", "relationships.jsonl"):
@@ -471,6 +549,30 @@ def build_release_candidate(
         )
     if current is not None:
         _enforce_append_only_knowledge(current_records, curated_records)
+        current_external = {
+            record["id"]: {
+                key: value for key, value in record.items() if key != "snapshot_id"
+            }
+            for record in current_records.get("sources.jsonl", [])
+            if record["id"] not in source_by_id
+        }
+        candidate_external = {record["id"]: record for record in external_sources}
+        missing_external = sorted(set(current_external) - set(candidate_external))
+        mutated_external = sorted(
+            source_id
+            for source_id in set(current_external) & set(candidate_external)
+            if current_external[source_id]
+            != {
+                key: value
+                for key, value in candidate_external[source_id].items()
+                if key != "snapshot_id"
+            }
+        )
+        if missing_external or mutated_external:
+            raise PublicationError(
+                "accepted external sources are append-only; "
+                f"deleted={missing_external}, mutated={mutated_external}"
+            )
     semantic_identity = {
         "schema_version": 1,
         "config_sha256": expected_config_sha256,
@@ -479,13 +581,20 @@ def build_release_candidate(
         "curated": {
             filename: _canonical_jsonl_hash(payload)
             for filename, payload in curated_payloads.items()
-        },
+        }
+        | (
+            {"sources.jsonl": _canonical_jsonl_hash(curated_source_payload)}
+            if curated_source_payload
+            else {}
+        ),
     }
     semantic_digest = canonical_json_hash(semantic_identity)
     identity = {
         **semantic_identity,
         "snapshot_id": snapshot.snapshot_id,
-        "source_bytes": {entry.source_id: entry.sha256 for entry in snapshot.entries},
+        "source_bytes": {
+            source["id"]: source["content_sha256"] for source in source_records
+        },
     }
     release_digest = canonical_json_hash(identity)
     release_id = f"release-{release_digest[:20]}"

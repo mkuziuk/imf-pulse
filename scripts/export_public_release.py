@@ -346,13 +346,17 @@ def _approve_project_generated_artifact(manifest: Mapping[str, Any]) -> dict[str
             approved_rows.append(_approve_project_generated_artifact(row))
         exported["artifacts"] = approved_rows
         return exported
-    if _artifact_is_cleared(exported):
-        return exported
     if not _is_project_generated_artifact(exported):
+        if _artifact_is_cleared(exported):
+            return exported
         raise PublicReleaseError(
             f"artifact is not cleared and is not project-generated: "
             f"{exported.get('artifact_id') or exported.get('id')}"
         )
+    # The public export is the owner-approval boundary. Stamp every generated
+    # artifact, including one whose private manifest already permits public
+    # use, so the independently audited bundle carries uniform proof of that
+    # approval rather than relying on an unstamped source flag.
     rights = dict(exported.get("rights", {}))
     rights.update(
         {

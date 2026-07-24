@@ -220,6 +220,21 @@ def _validate_release_identity(
     sources = parsed.get("sources.jsonl", [])
     if any(source.get("snapshot_id") != manifest.get("snapshot_id") for source in sources):
         raise ValidationError("source records do not match the release snapshot id")
+    curated_identity = {
+        filename: canonical_json_hash(
+            sorted(parsed.get(filename, []), key=lambda record: record["id"])
+        )
+        for filename in KNOWLEDGE_FILENAMES
+    }
+    external_sources = [
+        {key: value for key, value in source.items() if key != "snapshot_id"}
+        for source in sources
+        if isinstance(source.get("url"), str)
+    ]
+    if external_sources:
+        curated_identity["sources.jsonl"] = canonical_json_hash(
+            sorted(external_sources, key=lambda record: record["id"])
+        )
     semantic_identity = {
         "schema_version": 1,
         "config_sha256": manifest.get("config_sha256"),
@@ -228,12 +243,7 @@ def _validate_release_identity(
             source["id"]: source.get("extract_semantic_sha256")
             for source in sources
         },
-        "curated": {
-            filename: canonical_json_hash(
-                sorted(parsed.get(filename, []), key=lambda record: record["id"])
-            )
-            for filename in KNOWLEDGE_FILENAMES
-        },
+        "curated": curated_identity,
     }
     semantic_fingerprint = canonical_json_hash(semantic_identity)
     if manifest.get("semantic_fingerprint") != semantic_fingerprint:
