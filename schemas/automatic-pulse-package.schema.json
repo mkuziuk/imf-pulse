@@ -152,11 +152,30 @@
         "media_type": {"type": "string", "enum": ["image/png", "image/jpeg"]},
         "generation": {
           "type": "object",
-          "required": ["model", "prompt", "generated_at"],
+          "required": [
+            "model",
+            "prompt",
+            "generated_at",
+            "source_reference",
+            "reproduction_policy"
+          ],
           "properties": {
             "model": {"type": "string", "minLength": 1, "maxLength": 100},
             "prompt": {"type": "string", "minLength": 20, "maxLength": 8000},
-            "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"}
+            "generated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+            "source_reference": {
+              "type": "object",
+              "required": ["source_id", "source_sha256", "locator"],
+              "properties": {
+                "source_id": {"$ref": "common.schema.json#/$defs/identifier"},
+                "source_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+                "locator": {"$ref": "evidence.schema.json#/$defs/structuredLocator"}
+              },
+              "additionalProperties": false
+            },
+            "reproduction_policy": {
+              "const": "scientific-content-faithful_visual-form-original"
+            }
           },
           "additionalProperties": false
         },

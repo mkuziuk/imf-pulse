@@ -34,7 +34,7 @@ from research_pipeline.release import (
     _validate_accepted_publications_digest,
     _validate_pointer_history_summaries,
 )
-from research_pipeline.validation import read_json, validate_release_directory
+from research_pipeline.validation import read_json, validate_records, validate_release_directory
 
 
 PUBLIC_RELEASE_KIND = "imf-pulse-public-release"
@@ -135,6 +135,7 @@ CURRENT_PUBLIC_FIELDS = {
     "accepted_pulses",
     "accepted_artifact_manifests",
     "latest_accepted_artifact_manifests",
+    "pulse_artifact_supplements",
 }
 
 
@@ -488,20 +489,43 @@ def _validated_current(
     return current, parsed, accepted
 
 
-def _public_current(current: Mapping[str, Any], accepted: list[dict[str, Any]]) -> dict[str, Any]:
+def _pulse_id_for_path(value: str) -> str:
+    identity = parse_pulse_path(value)
+    if identity is None:
+        raise PublicReleaseError(f"invalid pulse identity: {value}")
+    return identity.pulse_id
+
+
+def _public_current(
+    current: Mapping[str, Any],
+    accepted: list[dict[str, Any]],
+    supplements: Mapping[str, list[str]] | None = None,
+) -> dict[str, Any]:
+    supplements = supplements or {}
     accepted_pulses = [item["pulse"] for item in accepted]
     artifact_urls: list[str] = []
     for publication in accepted:
         for manifest in publication.get("artifact_manifests", []):
             if manifest["url"] not in artifact_urls:
                 artifact_urls.append(manifest["url"])
+    for urls in supplements.values():
+        for url in urls:
+            if url not in artifact_urls:
+                artifact_urls.append(url)
     latest = accepted[-1]
     latest_artifacts = [item["url"] for item in latest.get("artifact_manifests", [])]
+    for url in supplements.get(_pulse_id_for_path(latest["pulse"]), []):
+        if url not in latest_artifacts:
+            latest_artifacts.append(url)
     status = current.get("status")
     if status not in {"published", "processed_no_pulse", "unchanged"}:
         raise PublicReleaseError("current checkpoint is not accepted for public export")
     selected_pulse = current.get("pulse") if status == "published" else None
-    selected_artifacts = current.get("artifact_manifests", []) if status == "published" else []
+    selected_artifacts = list(current.get("artifact_manifests", [])) if status == "published" else []
+    if status == "published" and isinstance(selected_pulse, str):
+        for url in supplements.get(_pulse_id_for_path(selected_pulse), []):
+            if url not in selected_artifacts:
+                selected_artifacts.append(url)
     summary = {
         "schema_version": 1,
         "release_id": current["release_id"],
@@ -513,6 +537,10 @@ def _public_current(current: Mapping[str, Any], accepted: list[dict[str, Any]]) 
         "accepted_artifact_manifests": artifact_urls,
         "latest_accepted_artifact_manifests": latest_artifacts,
     }
+    if supplements:
+        summary["pulse_artifact_supplements"] = {
+            pulse_id: list(urls) for pulse_id, urls in sorted(supplements.items())
+        }
     for field in ("updated_at", "published_at", "last_checked_at"):
         if isinstance(current.get(field), str):
             summary[field] = current[field]
@@ -585,6 +613,126 @@ def _publication_payloads(
                     raise PublicReleaseError(f"artifact URL was reused with different bytes: {relative}")
                 payloads[relative] = artifact_payload
     return payloads
+
+
+def _manual_supplement_payloads(
+    project_root: Path, accepted: list[dict[str, Any]]
+) -> tuple[dict[str, bytes], dict[str, list[str]]]:
+    """Load owner-approved visual supplements without rewriting accepted pulses.
+
+    Each supplement is bound to an already accepted pulse hash and to exact
+    project-generated artifact-manifest bytes. The registry itself remains a
+    private governance input; the public current summary carries only the
+    pulse-to-manifest mapping needed by the site.
+    """
+
+    path = project_root / "config" / "pulse-artifact-supplements.json"
+    if not path.exists():
+        return {}, {}
+    root = _strict_json(_read_stable(path, path.relative_to(project_root).as_posix()), str(path))
+    if not isinstance(root, dict) or set(root) != {"schema_version", "supplements"}:
+        raise PublicReleaseError("pulse artifact supplement registry has an unexpected field set")
+    if root.get("schema_version") != 1 or not isinstance(root.get("supplements"), list):
+        raise PublicReleaseError("pulse artifact supplement registry identity is invalid")
+
+    accepted_by_pulse = {item["pulse"]: item for item in accepted}
+    payloads: dict[str, bytes] = {}
+    mapping: dict[str, list[str]] = {}
+    seen_ids: set[str] = set()
+    seen_urls: set[str] = set()
+    required_fields = {
+        "id",
+        "pulse_id",
+        "pulse_path",
+        "pulse_sha256",
+        "artifact_manifests",
+        "approved_by",
+        "approved_on",
+        "reason",
+    }
+    manifest_fields = {"url", "path", "sha256"}
+
+    for row in root["supplements"]:
+        if not isinstance(row, dict) or set(row) != required_fields:
+            raise PublicReleaseError("pulse artifact supplement has an unexpected field set")
+        supplement_id = row.get("id")
+        if (
+            not isinstance(supplement_id, str)
+            or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", supplement_id)
+            or supplement_id in seen_ids
+        ):
+            raise PublicReleaseError("pulse artifact supplement id is invalid or duplicated")
+        seen_ids.add(supplement_id)
+        if row.get("approved_by") != "project_owner" or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}", str(row.get("approved_on", ""))
+        ):
+            raise PublicReleaseError("pulse artifact supplement lacks project-owner approval")
+        if not isinstance(row.get("reason"), str) or len(row["reason"].strip()) < 20:
+            raise PublicReleaseError("pulse artifact supplement reason is incomplete")
+
+        pulse_path = row.get("pulse_path")
+        publication = accepted_by_pulse.get(pulse_path)
+        if publication is None:
+            raise PublicReleaseError("pulse artifact supplement targets an unaccepted pulse")
+        expected_pulse_id = _pulse_id_for_path(str(pulse_path))
+        if row.get("pulse_id") != expected_pulse_id:
+            raise PublicReleaseError("pulse artifact supplement pulse id/path disagree")
+        pulse_sha = row.get("pulse_sha256")
+        if pulse_sha != publication.get("pulse_sha256"):
+            raise PublicReleaseError("pulse artifact supplement pulse hash is stale")
+        _read_project_bound_file(project_root, publication["bound_pulse"], str(pulse_sha))
+
+        manifests = row.get("artifact_manifests")
+        if not isinstance(manifests, list) or not manifests:
+            raise PublicReleaseError("pulse artifact supplement has no artifact manifests")
+        pulse_urls = mapping.setdefault(expected_pulse_id, [])
+        for manifest_record in manifests:
+            if not isinstance(manifest_record, dict) or set(manifest_record) != manifest_fields:
+                raise PublicReleaseError("supplement artifact manifest record is invalid")
+            manifest_url = manifest_record.get("url")
+            manifest_relative = _url_to_public_relative(str(manifest_url), manifest=True)
+            expected_path = f"public/{manifest_relative}"
+            if manifest_record.get("path") != expected_path:
+                raise PublicReleaseError("supplement artifact manifest path/url disagree")
+            raw_manifest = _read_project_bound_file(
+                project_root, expected_path, str(manifest_record.get("sha256"))
+            )
+            manifest = _strict_json(raw_manifest, manifest_relative)
+            if not isinstance(manifest, dict):
+                raise PublicReleaseError("supplement artifact manifest is not an object")
+            validate_records(
+                [manifest], project_root / "schemas" / "artifact.schema.json", manifest_relative
+            )
+            if (
+                manifest.get("manifest_url") != manifest_url
+                or manifest.get("related_pulse") != expected_pulse_id
+                or not _is_project_generated_artifact(manifest)
+            ):
+                raise PublicReleaseError(
+                    "supplement artifact is not a pulse-bound project-generated artifact"
+                )
+            approved_manifest = _approve_project_generated_artifact(manifest)
+            approved_payload = _json_bytes(approved_manifest)
+            if manifest_relative in payloads or str(manifest_url) in seen_urls:
+                raise PublicReleaseError("supplement artifact manifest URL is duplicated")
+            payloads[manifest_relative] = approved_payload
+            seen_urls.add(str(manifest_url))
+            pulse_urls.append(str(manifest_url))
+
+            for file_record in manifest.get("files", []):
+                if not isinstance(file_record, Mapping):
+                    raise PublicReleaseError("supplement artifact file record is invalid")
+                relative = _url_to_public_relative(str(file_record.get("url")))
+                source_path = f"public/{relative}"
+                artifact_payload = _read_project_bound_file(
+                    project_root, source_path, str(file_record.get("sha256"))
+                )
+                if len(artifact_payload) != file_record.get("bytes"):
+                    raise PublicReleaseError("supplement artifact byte count is invalid")
+                if relative in payloads:
+                    raise PublicReleaseError("supplement artifact file URL is duplicated")
+                payloads[relative] = artifact_payload
+    return payloads, mapping
 
 
 def _artifact_references(manifest: Mapping[str, Any], manifest_relative: str) -> set[str]:
@@ -733,11 +881,32 @@ def audit_public_release(directory: Path) -> dict[str, Any]:
     if len(expected_manifest_files) != len(manifests) or expected_manifest_files != actual_manifest_files:
         raise PublicReleaseError("public current artifact history does not match exported manifests")
 
+    raw_supplements = current.get("pulse_artifact_supplements", {})
+    if not isinstance(raw_supplements, dict):
+        raise PublicReleaseError("public pulse artifact supplements must be an object")
+    accepted_pulse_ids = {_pulse_id_for_path(value) for value in pulses}
+    supplement_pulse_by_manifest: dict[str, str] = {}
+    for pulse_id, urls in raw_supplements.items():
+        if pulse_id not in accepted_pulse_ids or not isinstance(urls, list) or not urls:
+            raise PublicReleaseError("public pulse artifact supplement targets an unknown pulse")
+        if len(urls) != len(set(urls)) or any(not isinstance(url, str) for url in urls):
+            raise PublicReleaseError("public pulse artifact supplement URL list is invalid")
+        for url in urls:
+            relative = _url_to_public_relative(url, manifest=True)
+            if relative not in expected_manifest_files or relative in supplement_pulse_by_manifest:
+                raise PublicReleaseError("public pulse artifact supplement manifest is invalid")
+            supplement_pulse_by_manifest[relative] = pulse_id
+
     referenced_artifacts: set[str] = set()
     for manifest_relative in sorted(actual_manifest_files):
         artifact = _strict_json(files[manifest_relative], manifest_relative)
         if not isinstance(artifact, dict):
             raise PublicReleaseError(f"artifact manifest is not an object: {manifest_relative}")
+        supplemental_pulse = supplement_pulse_by_manifest.get(manifest_relative)
+        if supplemental_pulse is not None and artifact.get("related_pulse") != supplemental_pulse:
+            raise PublicReleaseError(
+                f"supplement artifact is not bound to its public pulse: {manifest_relative}"
+            )
         referenced_artifacts.update(_artifact_references(artifact, manifest_relative))
     actual_artifacts = {path for path in files if path.startswith("artifacts/")}
     if referenced_artifacts != actual_artifacts:
@@ -831,8 +1000,15 @@ def export_public_release(project_root: Path, output: str) -> dict[str, Any]:
     destination = _strict_project_child(project_root, output, must_exist=False)
     current, parsed, accepted = _validated_current(project_root)
     payloads = _sanitize_knowledge(parsed)
-    payloads["current.json"] = _json_bytes(_public_current(current, accepted))
     payloads.update(_publication_payloads(project_root, accepted))
+    supplement_payloads, supplements = _manual_supplement_payloads(project_root, accepted)
+    collisions = set(payloads).intersection(supplement_payloads)
+    if collisions:
+        raise PublicReleaseError(
+            f"supplement artifacts collide with accepted publication bytes: {sorted(collisions)}"
+        )
+    payloads.update(supplement_payloads)
+    payloads["current.json"] = _json_bytes(_public_current(current, accepted, supplements))
     for relative, payload in payloads.items():
         if not _allowed_public_path(relative):
             raise PublicReleaseError(f"export attempted a forbidden public path: {relative}")

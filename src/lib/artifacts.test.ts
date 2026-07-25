@@ -67,6 +67,27 @@ describe("artifact normalization", () => {
     );
   });
 
+  it("adds hash-bound manual visual supplements to their accepted pulse", () => {
+    const supplement = "/artifacts/2026-07-22/supplement/manifest.json";
+    const current = CurrentReleaseSchema.parse({
+      release_id: "release-supplement",
+      status: "processed_no_pulse",
+      pulse: null,
+      latest_accepted_pulse: report.sourcePath.replace(/^\//, ""),
+      accepted_pulses: [report.sourcePath.replace(/^\//, "")],
+      accepted_artifact_manifests: [
+        "/artifacts/2026-07-22/authorized/manifest.json",
+        supplement
+      ],
+      pulse_artifact_supplements: { [report.id]: [supplement] }
+    });
+
+    expect(manifestUrlsForPulse(report, current, "retained")).toEqual([
+      "/artifacts/2026-07-22/authorized/manifest.json",
+      supplement
+    ]);
+  });
+
   it("accepts the canonical Phase 1 manifest aliases without losing provenance", () => {
     const artifacts = normalizeArtifactManifest(
       {

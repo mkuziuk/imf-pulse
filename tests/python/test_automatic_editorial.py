@@ -182,8 +182,18 @@ def _package(root: Path) -> tuple[dict, dict]:
                 "media_type": "image/png",
                 "generation": {
                     "model": "test-image-model",
-                    "prompt": "Create a restrained scientific illustration for this automatic test fixture.",
+                    "prompt": "Create a restrained scientific illustration for this automatic test fixture. Conceptual illustration — not research evidence",
                     "generated_at": "2026-07-24T05:00:00Z",
+                    "source_reference": {
+                        "source_id": SOURCE_ID,
+                        "source_sha256": digest,
+                        "locator": {
+                            "kind": "pdf",
+                            "path": source_path,
+                            "page": 1,
+                        },
+                    },
+                    "reproduction_policy": "scientific-content-faithful_visual-form-original",
                 },
             },
         ],
@@ -260,6 +270,22 @@ def test_automatic_package_rejects_candidate_hash_mismatch_without_writes(
             root, DATE, batch_id=BATCH_ID, candidates=[tampered]
         )
     assert not (root / "knowledge" / "curated" / "sources.jsonl").exists()
+    assert not (root / "public" / "artifacts").exists()
+
+
+def test_automatic_generated_image_requires_exact_source_page_brief(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    package["artifacts"][1]["generation"]["source_reference"]["locator"]["page"] = 3
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+
+    with pytest.raises(PublicationError, match="source-page brief"):
+        load_and_materialize_automatic_package(
+            root, DATE, batch_id=BATCH_ID, candidates=[candidate]
+        )
     assert not (root / "public" / "artifacts").exists()
 
 

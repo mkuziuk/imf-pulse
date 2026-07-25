@@ -190,7 +190,7 @@ export async function loadArtifactManifests(urls: string[]): Promise<ArtifactLoa
   const issues: string[] = [];
   const artifacts: ArtifactRecord[] = [];
 
-  await Promise.all(
+  const loaded = await Promise.all(
     uniqueUrls.map(async (url) => {
       try {
         let pending = artifactCache.get(url);
@@ -198,15 +198,17 @@ export async function loadArtifactManifests(urls: string[]): Promise<ArtifactLoa
           pending = loadOneManifest(url);
           artifactCache.set(url, pending);
         }
-        artifacts.push(...(await pending));
+        return await pending;
       } catch (error) {
         artifactCache.delete(url);
         issues.push(
           `${url}: ${error instanceof Error ? error.message : "Artifact manifest unavailable."}`
         );
+        return [];
       }
     })
   );
+  for (const rows of loaded) artifacts.push(...rows);
 
   return {
     artifacts: artifacts.filter(
@@ -225,7 +227,8 @@ export function manifestUrlsForPulse(
   current: ReturnType<typeof getKnowledgeSnapshot>["current"],
   mode: PulseCatalog["mode"]
 ): string[] {
-  const pulseUrls = uniqueManifestUrls(pulse.artifactManifests);
+  const supplementUrls = current?.pulse_artifact_supplements?.[pulse.id] ?? [];
+  const pulseUrls = uniqueManifestUrls([...pulse.artifactManifests, ...supplementUrls]);
   if (!current || mode === "preview") return pulseUrls;
   const releaseUrls = uniqueManifestUrls([
     ...current.accepted_artifact_manifests,

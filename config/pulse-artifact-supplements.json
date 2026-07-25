@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "supplements": [
+    {
+      "id": "manual-visual-supplement-2026-07-24",
+      "pulse_id": "pulse-2026-07-24",
+      "pulse_path": "content/pulses/2026-07-24.md",
+      "pulse_sha256": "dc8ac3ef7639dfa451f59fc75f6b95c8708c8ed64792ecb4ec7267e0080c9379",
+      "artifact_manifests": [
+        {
+          "url": "/artifacts/2026-07-24/space-time-signal-cube/manifest.json",
+          "path": "public/artifacts/2026-07-24/space-time-signal-cube/manifest.json",
+          "sha256": "fba8e59588ac24187983f74876f3e8afc4260c2de422391e97e31745b87f5335"
+        },
+        {
+          "url": "/artifacts/2026-07-24/alternating-decomposition-map/manifest.json",
+          "path": "public/artifacts/2026-07-24/alternating-decomposition-map/manifest.json",
+          "sha256": "e2e91b666d0caeeee15e93fc4fb9ee3d3292da46e848f3a220c64bed923d41f8"
+        }
+      ],
+      "approved_by": "project_owner",
+      "approved_on": "2026-07-25",
+      "reason": "Append two owner-reviewed, project-generated conceptual illustrations to the accepted July 24 pulse without modifying its immutable Markdown or release binding."
+    }
+  ]
+}

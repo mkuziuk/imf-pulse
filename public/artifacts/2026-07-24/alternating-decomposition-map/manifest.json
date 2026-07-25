@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "artifact_id": "manual-alternating-decomposition-map-2026-07-24",
+  "artifact_date": "2026-07-24",
+  "artifact_type": "generated_image",
+  "title": "One residual, two directions",
+  "caption": "A schematic mixed field passing through alternating spatial and temporal views before separating into modes and a residual. Conceptual illustration — not research evidence",
+  "relation_to_report": "This illustration clarifies the pulse's central architectural point: the spatial pass changes the residual seen by the temporal pass, and the alternating process yields distinct schematic components.",
+  "stable_url": "/artifacts/2026-07-24/alternating-decomposition-map/alternating-decomposition-map.png",
+  "manifest_url": "/artifacts/2026-07-24/alternating-decomposition-map/manifest.json",
+  "rights": {
+    "status": "project_generated_illustration",
+    "may_publish_publicly": true,
+    "local_display_allowed": true,
+    "public_deployment_requires_owner_approval": false,
+    "license": "All rights reserved",
+    "creator": "The Residual"
+  },
+  "files": [
+    {
+      "url": "/artifacts/2026-07-24/alternating-decomposition-map/alternating-decomposition-map.png",
+      "role": "generated conceptual illustration",
+      "media_type": "image/png",
+      "sha256": "8d5f9aa0cfe7f6879f7bd7403296fd79bba4770b046e1fbdebf165fe3030fc7d",
+      "bytes": 2195768
+    }
+  ],
+  "parameters": {
+    "generation": {
+      "mode": "built_in",
+      "model": "OpenAI image generation",
+      "generated_at": "2026-07-25T05:48:43Z",
+      "prompt": "Create an original scientific-educational editorial illustration for a research explainer titled 'One residual, two directions'. Show a mixed layered space-time field, interlocking spatial and temporal analytical passes, and three abstract outputs: a broad spatial mode, a fine temporal ribbon, and a pale residual. Use no real data, numeric axes, equations, legends, plotted values, or recreated paper figure. Use a warm ivory, navy, cobalt, teal, amber, and rust editorial palette. Render the exact footer: Conceptual illustration — not research evidence",
+      "source_reference": {
+        "source_id": "src-external-arxiv-2412-00553v1",
+        "source_sha256": "3a77f5096cac66d383e9e05b75c4c0cb1170d4ad195c0f70580f1384a194abe9",
+        "locator": {"kind": "pdf", "path": "external/arxiv/2412.00553v1.pdf", "page": 5, "section": "Algorithm 1"}
+      },
+      "reproduction_policy": "scientific-content-faithful_visual-form-original",
+      "source_pixels_supplied": false
+    }
+  },
+  "limitations": [
+    "The separated layers are schematic and are not outputs from the paper's experiments.",
+    "The composition simplifies support selection, stopping conditions, and repeated outer iterations.",
+    "The image explains the method's direction-changing structure and is not performance evidence."
+  ],
+  "related_pulse": "pulse-2026-07-24"
+}

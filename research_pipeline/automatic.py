@@ -672,6 +672,21 @@ def _image_payloads(
         "limitations": artifact["limitations"],
     }
     if kind == "generated_image":
+        generation = artifact["generation"]
+        reference = generation["source_reference"]
+        locator = reference["locator"]
+        if (
+            reference["source_id"] != source["id"]
+            or reference["source_sha256"] != source["content_sha256"]
+            or locator.get("kind") != "pdf"
+            or locator.get("path") != source.get("relative_path")
+            or not isinstance(locator.get("page"), int)
+            or not 1 <= locator["page"] <= page_count
+            or "Conceptual illustration — not research evidence" not in generation["prompt"]
+        ):
+            raise PublicationError(
+                "automatic generated image lacks an exact source-page brief or conceptual label"
+            )
         manifest["rights"] = {
             "status": "project_generated_illustration",
             "may_publish_publicly": True,
@@ -680,7 +695,7 @@ def _image_payloads(
             "license": "All rights reserved",
             "creator": "The Residual",
         }
-        manifest["parameters"] = {"generation": dict(artifact["generation"])}
+        manifest["parameters"] = {"generation": dict(generation)}
     else:
         locator = artifact["locator"]
         source_rights = source.get("rights", {})

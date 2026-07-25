@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "artifact_id": "manual-space-time-signal-cube-2026-07-24",
+  "artifact_date": "2026-07-24",
+  "artifact_type": "generated_image",
+  "title": "A signal that lives in space and time",
+  "caption": "A synthetic space-time field shown as evolving spatial slices with one temporal trace. Conceptual illustration — not research evidence",
+  "relation_to_report": "This illustration helps a newcomer see the paper's input as a spatial field that changes through time before the pulse discusses alternating decomposition.",
+  "stable_url": "/artifacts/2026-07-24/space-time-signal-cube/space-time-signal-cube.png",
+  "manifest_url": "/artifacts/2026-07-24/space-time-signal-cube/manifest.json",
+  "rights": {
+    "status": "project_generated_illustration",
+    "may_publish_publicly": true,
+    "local_display_allowed": true,
+    "public_deployment_requires_owner_approval": false,
+    "license": "All rights reserved",
+    "creator": "The Residual"
+  },
+  "files": [
+    {
+      "url": "/artifacts/2026-07-24/space-time-signal-cube/space-time-signal-cube.png",
+      "role": "generated conceptual illustration",
+      "media_type": "image/png",
+      "sha256": "9c9a05956c292871e5c8795dd740166ea5cb7a8c08ebeff2690e29e56eafb8ce",
+      "bytes": 2136972
+    }
+  ],
+  "parameters": {
+    "generation": {
+      "mode": "built_in",
+      "model": "OpenAI image generation",
+      "generated_at": "2026-07-25T05:48:43Z",
+      "prompt": "Create an original scientific-educational editorial illustration for a research explainer titled 'A signal that lives in space and time'. Show an isometric translucent data cube made of stacked spatial slices receding through time, with abstract smooth oscillatory fields changing across slices and one temporal trace emerging from a selected point. Use synthetic geometry only: no real dataset, numeric ticks, equations, copied chart, or recognizable paper plot. Use a warm ivory, navy, cobalt, teal, amber, and rust editorial palette. Render the exact footer: Conceptual illustration — not research evidence",
+      "source_reference": {
+        "source_id": "src-external-arxiv-2412-00553v1",
+        "source_sha256": "3a77f5096cac66d383e9e05b75c4c0cb1170d4ad195c0f70580f1384a194abe9",
+        "locator": {"kind": "pdf", "path": "external/arxiv/2412.00553v1.pdf", "page": 6, "section": "Figure 1"}
+      },
+      "reproduction_policy": "scientific-content-faithful_visual-form-original",
+      "source_pixels_supplied": false
+    }
+  },
+  "limitations": [
+    "The fields and trace are synthetic and do not reproduce the paper's numerical example.",
+    "The illustration omits filter-support selection, stopping criteria, and quantitative scales.",
+    "It explains the type of object being decomposed and is not evidence for algorithmic performance."
+  ],
+  "related_pulse": "pulse-2026-07-24"
+}

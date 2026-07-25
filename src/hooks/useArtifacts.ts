@@ -6,7 +6,7 @@ interface ArtifactState extends ArtifactLoadResult {
 }
 
 export function useArtifacts(urls: string[]): ArtifactState {
-  const key = useMemo(() => [...new Set(urls)].sort().join("\n"), [urls]);
+  const key = useMemo(() => [...new Set(urls)].join("\n"), [urls]);
   const [state, setState] = useState<ArtifactState>({
     artifacts: [],
     issues: [],

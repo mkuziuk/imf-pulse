@@ -94,7 +94,8 @@ const PUBLIC_CURRENT_FIELDS = new Set([
   "latest_accepted_pulse",
   "accepted_pulses",
   "accepted_artifact_manifests",
-  "latest_accepted_artifact_manifests"
+  "latest_accepted_artifact_manifests",
+  "pulse_artifact_supplements"
 ]);
 const PUBLIC_KNOWLEDGE_NAMES = [
   "sources.jsonl",
@@ -462,6 +463,32 @@ function selectPublicReleaseSnapshot(projectRoot: string, configured: string): A
     current.accepted_artifact_manifests,
     "accepted_artifact_manifests"
   );
+  const rawSupplements = current.pulse_artifact_supplements ?? {};
+  if (!isRecord(rawSupplements)) {
+    throw new Error("pulse_artifact_supplements must be an object.");
+  }
+  const acceptedPulseIds = new Set(
+    acceptedPulses.map((reference) => {
+      const match = reference.match(
+        /^content\/pulses\/(\d{4}-\d{2}-\d{2})(?:-([1-9]\d{0,3}))?\.md$/
+      );
+      if (!match) throw new Error(`Public release has an unsafe pulse reference: ${reference}.`);
+      return match[2] ? `pulse-${match[1]}-${match[2]}` : `pulse-${match[1]}`;
+    })
+  );
+  const supplementPulseByManifest = new Map<string, string>();
+  for (const [pulseId, value] of Object.entries(rawSupplements)) {
+    const urls = exactStringArray(value, `pulse_artifact_supplements.${pulseId}`);
+    if (!acceptedPulseIds.has(pulseId) || urls.length === 0) {
+      throw new Error("A pulse artifact supplement targets an unknown pulse.");
+    }
+    for (const url of urls) {
+      if (!acceptedManifests.includes(url) || supplementPulseByManifest.has(url)) {
+        throw new Error("A pulse artifact supplement manifest is invalid or duplicated.");
+      }
+      supplementPulseByManifest.set(url, pulseId);
+    }
+  }
   const expectedManifestRelatives = new Set(
     acceptedManifests.map((url) => {
       const relative = publicUrlToRelative(url, "accepted artifact manifest");
@@ -491,6 +518,11 @@ function selectPublicReleaseSnapshot(projectRoot: string, configured: string): A
       artifact = parsed;
     } catch {
       throw new Error(`Public artifact manifest is not valid JSON: ${relative}.`);
+    }
+    const manifestUrl = `/${relative}`;
+    const supplementalPulse = supplementPulseByManifest.get(manifestUrl);
+    if (supplementalPulse && artifact.related_pulse !== supplementalPulse) {
+      throw new Error(`Supplement artifact is not bound to its public pulse: ${relative}.`);
     }
     for (const reference of artifactReferences(artifact, relative)) {
       referencedArtifacts.add(reference);
