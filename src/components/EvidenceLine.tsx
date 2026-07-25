@@ -1,7 +1,6 @@
-import { Link } from "react-router-dom";
 import { asText, confidenceLabel, formatLocator } from "../lib/format";
-import { sourceAnchor } from "../lib/links";
-import type { EvidenceRef } from "../lib/schemas";
+import { directSourceHref } from "../lib/links";
+import type { EvidenceRef, SourceRecord } from "../lib/schemas";
 
 interface EvidenceLineProps {
   evidence: EvidenceRef[];
@@ -9,6 +8,7 @@ interface EvidenceLineProps {
   status?: string;
   assumptions?: string | string[];
   compact?: boolean;
+  sources?: readonly SourceRecord[];
 }
 
 export function EvidenceLine({
@@ -16,7 +16,8 @@ export function EvidenceLine({
   confidence,
   status,
   assumptions,
-  compact = false
+  compact = false,
+  sources = []
 }: EvidenceLineProps) {
   return (
     <dl className={`evidence-line${compact ? " evidence-line--compact" : ""}`}>
@@ -24,13 +25,23 @@ export function EvidenceLine({
         <dt>Evidence</dt>
         <dd>
           {evidence.length > 0 ? (
-            evidence.map((reference, index) => (
-              <span key={`${reference.source_id}-${index}`}>
-                {index > 0 ? "; " : null}
-                <Link to={sourceAnchor(reference.source_id)}>{reference.source_id}</Link>
-                <span> · {formatLocator(reference.locator)}</span>
-              </span>
-            ))
+            evidence.map((reference, index) => {
+              const href = directSourceHref(reference.source_id, sources);
+              return (
+                <span key={`${reference.source_id}-${index}`}>
+                  {index > 0 ? "; " : null}
+                  {href ? (
+                    <a href={href} target="_blank" rel="noopener noreferrer">
+                      {reference.source_id}
+                      <span className="external-mark" aria-label=" (external link)">↗</span>
+                    </a>
+                  ) : (
+                    <span>{reference.source_id}</span>
+                  )}
+                  <span> · {formatLocator(reference.locator)}</span>
+                </span>
+              );
+            })
           ) : (
             <span>Not registered</span>
           )}

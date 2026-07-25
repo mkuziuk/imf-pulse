@@ -50,7 +50,8 @@ describe("ResearchMapPage registers", () => {
     expect(within(method!).getByText("Boundary", { selector: "dt" })).toBeVisible();
     expect(within(method!).getByText("Parameters", { selector: "dt" })).toBeVisible();
     expect(within(method!).getByText("Computational assumptions", { selector: "dt" })).toBeVisible();
-    expect(within(method!).getByRole("link", { name: "src-repo-readme" })).toBeVisible();
+    expect(within(method!).queryByRole("link", { name: "src-repo-readme" })).not.toBeInTheDocument();
+    expect(within(method!).getByText("src-repo-readme")).toBeVisible();
 
     const experimentHeading = screen.getByRole("heading", {
       name: "Robust recursive Monte Carlo with and without contamination"
@@ -71,6 +72,9 @@ describe("ResearchMapPage registers", () => {
     ]) {
       expect(within(experiment!).getByText(label, { selector: "dt" })).toBeVisible();
     }
-    expect(within(experiment!).getByRole("link", { name: "src-robust-monte-carlo" })).toBeVisible();
+    expect(
+      within(experiment!).queryByRole("link", { name: "src-robust-monte-carlo" })
+    ).not.toBeInTheDocument();
+    expect(within(experiment!).getByText("src-robust-monte-carlo")).toBeVisible();
   });
 });

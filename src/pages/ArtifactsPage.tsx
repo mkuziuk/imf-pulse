@@ -3,9 +3,11 @@ import { ArtifactFigure } from "../components/ArtifactFigure";
 import { StatusLabel } from "../components/StatusLabel";
 import { useArtifacts } from "../hooks/useArtifacts";
 import { getArtifactManifestCatalog } from "../lib/artifacts";
+import { getKnowledgeSnapshot } from "../lib/data";
 
 export function ArtifactsPage() {
   const catalog = getArtifactManifestCatalog();
+  const knowledge = getKnowledgeSnapshot();
   const state = useArtifacts(catalog.manifestUrls);
   const [artifactClass, setArtifactClass] = useState("all");
   const classes = [...new Set(state.artifacts.map((artifact) => artifact.artifact_class))].sort();
@@ -56,7 +58,7 @@ export function ArtifactsPage() {
       {visible.length > 0 ? (
         <div className="artifact-ledger">
           {visible.map((artifact) => (
-            <ArtifactFigure key={artifact.id} artifact={artifact} />
+            <ArtifactFigure key={artifact.id} artifact={artifact} sources={knowledge.sources} />
           ))}
         </div>
       ) : !state.loading ? (

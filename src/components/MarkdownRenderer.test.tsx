@@ -1,7 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { withAppUrl } from "../lib/links";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+
+const publicSource = {
+  id: "src-public-paper",
+  title: "Public paper",
+  authors: [],
+  topics: [],
+  url: "https://example.org/paper"
+};
 
 describe("MarkdownRenderer", () => {
   afterEach(() => {
@@ -21,16 +28,21 @@ $$e_k = W_k\\varepsilon.$$
 | --- | ---: |
 | 1 | 0.02018 |
 
-[IMF.pdf, p. 6](/sources#src-imf-draft)`}
+[Public paper, p. 6](/sources#src-public-paper)`}
+        sources={[publicSource]}
       />
     );
     expect(screen.getByRole("heading", { level: 2 })).toHaveAttribute("id", "signal-01");
     expect(document.querySelector(".katex")).toBeInTheDocument();
     expect(document.querySelector("math")).not.toBeNull();
     expect(screen.getByRole("table")).toBeVisible();
-    expect(screen.getByRole("link", { name: "IMF.pdf, p. 6" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Public paper, p\. 6/ })).toHaveAttribute(
       "href",
-      withAppUrl("/sources#src-imf-draft")
+      "https://example.org/paper"
+    );
+    expect(screen.getByRole("link", { name: /Public paper, p\. 6/ })).toHaveAttribute(
+      "target",
+      "_blank"
     );
   });
 
@@ -70,25 +82,46 @@ $$e_k = W_k\\varepsilon.$$
     expect(screen.getByText(/validated manifest and rights record/i)).toBeVisible();
   });
 
-  it("separates Pages app routes from base-prefixed artifact files", () => {
+  it("resolves source citations externally and keeps artifacts base-prefixed", () => {
     vi.stubEnv("BASE_URL", "/imf-pulse/");
     vi.stubEnv("VITE_ROUTER_MODE", "hash");
 
     render(
       <MarkdownRenderer
-        markdown={`[source](/sources#source-1)
+        markdown={`[source](/sources#src-public-paper)
 
 [data](/artifacts/2026-07-22/chart.csv)`}
+        sources={[publicSource]}
       />
     );
 
-    expect(screen.getByRole("link", { name: "source" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /source/ })).toHaveAttribute(
       "href",
-      "/imf-pulse/#/sources#source-1"
+      "https://example.org/paper"
     );
     expect(screen.getByRole("link", { name: "data" })).toHaveAttribute(
       "href",
       "/imf-pulse/artifacts/2026-07-22/chart.csv"
     );
+  });
+
+  it("renders private and unknown source references as plain text", () => {
+    render(
+      <MarkdownRenderer
+        markdown="[private source](/sources#src-private)"
+        sources={[
+          {
+            id: "src-private",
+            title: "Private source",
+            authors: [],
+            topics: [],
+            location: "repo://imf/private.pdf"
+          }
+        ]}
+      />
+    );
+
+    expect(screen.queryByRole("link", { name: "private source" })).not.toBeInTheDocument();
+    expect(screen.getByText("private source")).toBeVisible();
   });
 });

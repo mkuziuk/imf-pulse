@@ -21,5 +21,6 @@ describe("SiteHeader", () => {
     await user.keyboard("{Escape}");
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(toggle).toHaveFocus();
+    expect(screen.queryByRole("link", { name: "Sources" })).not.toBeInTheDocument();
   });
 });

@@ -10,7 +10,7 @@ An annotated laboratory journal seen through an oscilloscope: warm paper, dark e
 - **Archive:** a chronological editorial ledger, not a card grid.
 - **Research map:** relationship view plus a source-backed inspector; use an accessible list fallback on small screens.
 - **Artifacts:** large figure ledger with caption, provenance, rights, stable URL, and data/spec downloads.
-- **Sources:** dense provenance ledger with expandable limitations and linked knowledge objects.
+- **Citations:** pulse citations resolve directly to public source URLs; private source records remain non-interactive text.
 
 ## Interaction thesis
 

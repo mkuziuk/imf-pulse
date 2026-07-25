@@ -97,7 +97,7 @@ function RelationshipInspector({
           <p>{targetDescription(experiment.reference_target)}</p>
         </div>
       ) : null}
-      <EvidenceLine evidence={relationship.evidence} compact />
+      <EvidenceLine evidence={relationship.evidence} sources={snapshot.sources} compact />
     </aside>
   );
 }
@@ -213,6 +213,7 @@ export function ResearchMapPage() {
                 </div>
                 <EvidenceLine
                   evidence={claim.evidence}
+                  sources={snapshot.sources}
                   confidence={claim.confidence}
                   assumptions={claim.assumptions}
                   compact
@@ -249,7 +250,7 @@ export function ResearchMapPage() {
                     ]}
                   />
                 </div>
-                <EvidenceLine evidence={method.evidence} compact />
+                <EvidenceLine evidence={method.evidence} sources={snapshot.sources} compact />
               </li>
             ))}
           </ol>
@@ -285,7 +286,7 @@ export function ResearchMapPage() {
                     ]}
                   />
                 </div>
-                <EvidenceLine evidence={experiment.evidence} compact />
+                <EvidenceLine evidence={experiment.evidence} sources={snapshot.sources} compact />
               </li>
             ))}
           </ol>

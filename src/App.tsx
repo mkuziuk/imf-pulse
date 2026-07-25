@@ -8,7 +8,6 @@ import { ArtifactsPage } from "./pages/ArtifactsPage";
 import { LatestPage } from "./pages/LatestPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ResearchMapPage } from "./pages/ResearchMapPage";
-import { SourcesPage } from "./pages/SourcesPage";
 
 export function releaseCheckLabel(snapshot: KnowledgeSnapshot): string {
   const current = snapshot.current;
@@ -80,7 +79,6 @@ export function App() {
           <Route path="/archive/:date/:pulseIndex" element={<LatestPage />} />
           <Route path="/research-map" element={<ResearchMapPage />} />
           <Route path="/artifacts" element={<ArtifactsPage />} />
-          <Route path="/sources" element={<SourcesPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>

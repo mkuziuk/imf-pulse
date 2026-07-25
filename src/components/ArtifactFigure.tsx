@@ -5,8 +5,8 @@ import {
   loadStageErrorData
 } from "../lib/artifacts";
 import { formatLocator } from "../lib/format";
-import { isExternalHref, safeHref, sourceAnchor, withAppUrl, withBaseUrl } from "../lib/links";
-import type { ArtifactRecord, StageErrorDatum } from "../lib/schemas";
+import { directSourceHref, isExternalHref, safeHref, withAppUrl, withBaseUrl } from "../lib/links";
+import type { ArtifactRecord, SourceRecord, StageErrorDatum } from "../lib/schemas";
 import { ScientificChart } from "./ScientificChart";
 import { StatusLabel } from "./StatusLabel";
 import { StructuralDiagram } from "./StructuralDiagram";
@@ -14,6 +14,7 @@ import { StructuralDiagram } from "./StructuralDiagram";
 interface ArtifactFigureProps {
   artifact: ArtifactRecord;
   featured?: boolean;
+  sources?: readonly SourceRecord[];
 }
 
 function fileMatches(file: ArtifactRecord["files"][number], pattern: RegExp): boolean {
@@ -37,7 +38,7 @@ function displayValue(value: unknown): string | undefined {
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
-export function ArtifactFigure({ artifact, featured = false }: ArtifactFigureProps) {
+export function ArtifactFigure({ artifact, featured = false, sources = [] }: ArtifactFigureProps) {
   const [chartData, setChartData] = useState<StageErrorDatum[]>([]);
   const csvFile = useMemo(
     () => artifact.files.find((file) => fileMatches(file, /\bdata\b|csv/i)),
@@ -181,6 +182,7 @@ export function ArtifactFigure({ artifact, featured = false }: ArtifactFigurePro
           <summary>Evidence and source locations</summary>
           <ol>
             {artifact.evidence.map((reference, index) => {
+              const sourceHref = directSourceHref(reference.source_id, sources);
               const detail = reference as typeof reference & {
                 statement?: unknown;
                 status?: unknown;
@@ -192,9 +194,14 @@ export function ArtifactFigure({ artifact, featured = false }: ArtifactFigurePro
                     <strong>{displayValue(detail.statement)}</strong>
                   ) : null}
                   <span>
-                    <a href={withAppUrl(sourceAnchor(reference.source_id))}>
-                      {reference.source_id}
-                    </a>
+                    {sourceHref ? (
+                      <a href={sourceHref} target="_blank" rel="noopener noreferrer">
+                        {reference.source_id}
+                        <span className="external-mark" aria-label=" (external link)">↗</span>
+                      </a>
+                    ) : (
+                      reference.source_id
+                    )}
                     {` · ${formatLocator(reference.locator)}`}
                   </span>
                   {displayValue(detail.status) || displayValue(detail.confidence) ? (

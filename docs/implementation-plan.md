@@ -4,7 +4,7 @@ The Residual remains a file-based local MVP. It has no application server, datab
 
 ## Phase 1 — editorial site and artifact rendering
 
-- `src/main.tsx`, `src/App.tsx`, and `src/pages/` implement Latest, Archive, Research map, Artifacts, Sources, and the error route. `/` opens the latest accepted pulse.
+- `src/main.tsx`, `src/App.tsx`, and `src/pages/` implement Latest, Archive, Research map, Artifacts, and the error route. `/` opens the latest accepted pulse; citations link directly to public source URLs.
 - `src/styles/` provides the warm journal palette, spectral accent, editorial grid, responsive layout, reduced-motion handling, focus states, and print treatment.
 - `src/components/MarkdownRenderer.tsx` renders GFM, KaTeX, safe Mermaid diagrams, citations, and figures without raw HTML.
 - `src/components/ScientificChart.tsx` renders responsive scientific charts with accessible tables and deterministic SVG fallback.

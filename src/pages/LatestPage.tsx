@@ -39,8 +39,8 @@ export function LatestPage() {
             The research shell is ready. A report will appear here only after its sources,
             citations, artifacts, tests, and production build pass validation.
           </p>
-          <Link className="text-link" to="/sources">
-            Inspect source status
+          <Link className="text-link" to="/archive">
+            Browse the archive
           </Link>
         </div>
       </section>
@@ -97,7 +97,7 @@ export function LatestPage() {
 
       {featuredArtifact ? (
         <div className="pulse-featured-figure">
-          <ArtifactFigure artifact={featuredArtifact} featured />
+          <ArtifactFigure artifact={featuredArtifact} sources={knowledge.sources} featured />
         </div>
       ) : (
         <section className="pulse-featured-figure artifact-loading" aria-live="polite">
@@ -118,7 +118,7 @@ export function LatestPage() {
             <h2 id="supporting-visuals-title">Additional views of the topic</h2>
           </header>
           {supportingArtifacts.map((artifact) => (
-            <ArtifactFigure key={artifact.id} artifact={artifact} />
+            <ArtifactFigure key={artifact.id} artifact={artifact} sources={knowledge.sources} />
           ))}
         </section>
       ) : null}
@@ -134,7 +134,7 @@ export function LatestPage() {
         </aside>
       ) : null}
 
-      <MarkdownRenderer markdown={pulse.body} className="pulse-body" />
+      <MarkdownRenderer markdown={pulse.body} className="pulse-body" sources={knowledge.sources} />
     </article>
   );
 }

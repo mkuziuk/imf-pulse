@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App, releaseCheckLabel } from "./App";
-import { getKnowledgeSnapshot, type KnowledgeSnapshot } from "./lib/data";
+import type { KnowledgeSnapshot } from "./lib/data";
 
 function renderRoute(route: string) {
   return render(
@@ -26,7 +26,7 @@ describe("application routes", () => {
     ["/archive", "Archive"],
     ["/research-map", "Research map"],
     ["/artifacts", "Artifacts"],
-    ["/sources", "Sources"],
+    ["/sources", "This research path does not exist."],
     ["/does-not-exist", "This research path does not exist."]
   ])("renders %s with one primary heading", (route, heading) => {
     renderRoute(route);
@@ -67,23 +67,6 @@ describe("application routes", () => {
       expect(document.activeElement).toBe(screen.getByRole("main"));
       expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: "auto" });
     });
-  });
-
-  it("focuses a cited source when opening a source hash", async () => {
-    const sourceId = getKnowledgeSnapshot().sources[0]?.id;
-    expect(sourceId).toBeDefined();
-    renderRoute(`/sources#${sourceId}`);
-    const source = document.getElementById(sourceId!);
-    expect(source).not.toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(source));
-    expect(source?.scrollIntoView).toHaveBeenCalledWith({ block: "center" });
-  });
-
-  it("ignores a malformed source hash without crashing", () => {
-    renderRoute("/sources#%");
-
-    expect(screen.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
-    expect(screen.getByRole("main")).toBeVisible();
   });
 
   it("provides a semantic accessibility path on every page", () => {

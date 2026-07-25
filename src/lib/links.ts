@@ -1,3 +1,5 @@
+import type { SourceRecord } from "./schemas";
+
 const ALLOWED_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
@@ -114,8 +116,21 @@ export function withAppUrl(value: string, options: AppUrlOptions = {}): string {
   return `${base}#${route}`;
 }
 
-export function sourceAnchor(sourceId: string): string {
-  return `/sources#${encodeURIComponent(sourceId)}`;
+export function directSourceHref(
+  sourceId: string,
+  sources: readonly SourceRecord[]
+): string | undefined {
+  const source = sources.find((candidate) => candidate.id === sourceId);
+  for (const candidate of [source?.url, source?.location]) {
+    const href = safeHref(candidate);
+    if (href && isExternalHref(href)) return href;
+  }
+  return undefined;
+}
+
+export function sourceIdFromLegacyHref(value: string): string | undefined {
+  const match = /^\/sources#([a-z][a-z0-9._-]*)$/.exec(value);
+  return match?.[1];
 }
 
 export function slugify(value: string): string {

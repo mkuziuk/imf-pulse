@@ -5,8 +5,7 @@ const navigation = [
   { to: "/", label: "Latest", end: true },
   { to: "/archive", label: "Archive" },
   { to: "/research-map", label: "Research map" },
-  { to: "/artifacts", label: "Artifacts" },
-  { to: "/sources", label: "Sources" }
+  { to: "/artifacts", label: "Artifacts" }
 ];
 
 export function SiteHeader() {

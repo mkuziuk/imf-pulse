@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isExternalHref, safeHref, withAppUrl, withBaseUrl } from "./links";
+import {
+  directSourceHref,
+  isExternalHref,
+  safeHref,
+  sourceIdFromLegacyHref,
+  withAppUrl,
+  withBaseUrl
+} from "./links";
 
 describe("trusted links", () => {
   it.each([
@@ -32,16 +39,29 @@ describe("trusted links", () => {
 
   it("uses hash routes only for the public router mode", () => {
     expect(
-      withAppUrl("/sources#source-1", {
+      withAppUrl("/archive/2026-07-24", {
         base: "/imf-pulse/",
         routerMode: "hash"
       })
-    ).toBe("/imf-pulse/#/sources#source-1");
+    ).toBe("/imf-pulse/#/archive/2026-07-24");
     expect(
-      withAppUrl("/sources#source-1", {
+      withAppUrl("/archive/2026-07-24", {
         base: "/",
         routerMode: "browser"
       })
-    ).toBe("/sources#source-1");
+    ).toBe("/archive/2026-07-24");
+  });
+
+  it("resolves only public web source locations", () => {
+    const sources = [
+      { id: "public", title: "Public", authors: [], topics: [], url: "https://example.org/paper" },
+      { id: "private", title: "Private", authors: [], topics: [], location: "repo://imf/paper.pdf" }
+    ];
+
+    expect(directSourceHref("public", sources)).toBe("https://example.org/paper");
+    expect(directSourceHref("private", sources)).toBeUndefined();
+    expect(directSourceHref("missing", sources)).toBeUndefined();
+    expect(sourceIdFromLegacyHref("/sources#public")).toBe("public");
+    expect(sourceIdFromLegacyHref("/sources#%2e%2e")).toBeUndefined();
   });
 });

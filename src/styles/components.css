@@ -840,7 +840,6 @@
 
 .archive-ledger,
 .artifact-ledger,
-.sources-page > .empty-ledger,
 .map-page > .empty-ledger,
 .load-issues,
 .reference-register {
@@ -1445,7 +1444,6 @@
   .load-issues,
   .reference-register,
   .knowledge-register,
-  .sources-page > .empty-ledger,
   .map-page > .empty-ledger {
     grid-column: 1 / -1;
   }
