@@ -1450,6 +1450,9 @@ def _publish_release_unlocked(
                 raise PublicationError(
                     f"pulse index must be the next available index {expected_index} for this date"
                 )
+            _enforce_distinct_pulse_content(
+                project_root, accepted_publications, new_publication
+            )
             _enforce_stable_artifact_history(accepted_publications, new_publication)
             accepted_publications.append(new_publication)
             latest_publication = accepted_publications[-1]
@@ -1885,6 +1888,52 @@ def _publication_content_identity(publication: Mapping[str, Any]) -> dict[str, A
             for artifact in publication.get("artifact_manifests", [])
         },
     }
+
+
+def _pulse_body_fingerprint(project_root: Path, publication: Mapping[str, Any]) -> str:
+    relative_path = publication.get("bound_pulse")
+    if not isinstance(relative_path, str):
+        raise PublicationError("accepted publication has no bound pulse path")
+    try:
+        with open_regular_file_under_root(project_root, relative_path) as descriptor:
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                chunk = os.read(descriptor, 1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > 2 * 1024 * 1024:
+                    raise PublicationError("accepted pulse exceeds the duplicate-check limit")
+                chunks.append(chunk)
+        text = b"".join(chunks).decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise PublicationError("accepted pulse cannot be read for duplicate checking") from exc
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    if normalized.startswith("---\n"):
+        frontmatter_end = normalized.find("\n---\n", 4)
+        if frontmatter_end < 0:
+            raise PublicationError("accepted pulse has malformed front matter")
+        normalized = normalized[frontmatter_end + 5 :]
+    canonical_body = " ".join(normalized.split())
+    if not canonical_body:
+        raise PublicationError("accepted pulse has no report body")
+    return hashlib.sha256(canonical_body.encode("utf-8")).hexdigest()
+
+
+def _enforce_distinct_pulse_content(
+    project_root: Path,
+    accepted: Sequence[Mapping[str, Any]],
+    new_publication: Mapping[str, Any],
+) -> None:
+    new_fingerprint = _pulse_body_fingerprint(project_root, new_publication)
+    for publication in accepted:
+        if publication.get("pulse_sha256") == new_publication.get("pulse_sha256"):
+            raise PublicationError("an accepted pulse cannot be republished with identical bytes")
+        if _pulse_body_fingerprint(project_root, publication) == new_fingerprint:
+            raise PublicationError(
+                "an accepted pulse cannot be republished under a different identity"
+            )
 
 
 def _enforce_stable_artifact_history(

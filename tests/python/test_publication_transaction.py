@@ -710,6 +710,14 @@ def test_two_indexed_pulses_on_one_date_append_to_accepted_history(
     second_pulse, second_manifest, _ = _write_publication(
         project, second.release_directory, date="2026-01-02", pulse_index=2
     )
+    second_pulse_path = project / second_pulse
+    second_pulse_path.write_text(
+        second_pulse_path.read_text(encoding="utf-8").replace(
+            "a candidate acquired a sealed report",
+            "a second candidate supplied a distinct sealed report",
+        ),
+        encoding="utf-8",
+    )
     publish_release(
         project,
         second.release_id,
@@ -728,6 +736,54 @@ def test_two_indexed_pulses_on_one_date_append_to_accepted_history(
     assert (project / "public-release" / "pulses" / "2026-01-02.md").is_file()
     assert (project / "public-release" / "pulses" / "2026-01-02-2.md").is_file()
     assert audit_public_release(project / "public-release")["pulse_count"] == 2
+
+
+def test_indexed_pulse_cannot_repeat_an_accepted_report_body(
+    tmp_path: Path, empty_knowledge: Path, schemas_directory: Path
+) -> None:
+    project = tmp_path / "project"
+    source = tmp_path / "source"
+    config, first = _prepare_candidate(
+        project, source, empty_knowledge, schemas_directory, "first source state"
+    )
+    first_pulse, first_manifest, _ = _write_publication(
+        project, first.release_directory, date="2026-01-02"
+    )
+    publish_release(
+        project,
+        first.release_id,
+        schemas_directory=schemas_directory,
+        pulse=first_pulse,
+        artifact_manifests=(first_manifest,),
+        gate_runner=_ok_gate,
+    )
+
+    (source / "README.md").write_text("second source state", encoding="utf-8")
+    _, snapshot_directory, _ = build_snapshot(config, project)
+    second = build_release_candidate(
+        project,
+        config,
+        snapshot_directory=snapshot_directory,
+        knowledge_directory=empty_knowledge,
+        schemas_directory=schemas_directory,
+    )
+    duplicate_pulse, duplicate_manifest, _ = _write_publication(
+        project, second.release_directory, date="2026-01-02", pulse_index=2
+    )
+
+    with pytest.raises(PublicationError, match="different identity"):
+        publish_release(
+            project,
+            second.release_id,
+            schemas_directory=schemas_directory,
+            pulse=duplicate_pulse,
+            artifact_manifests=(duplicate_manifest,),
+            gate_runner=_ok_gate,
+        )
+
+    pointer = read_json(project / "data" / "current.json")
+    assert pointer["accepted_pulses"] == [first_pulse]
+    assert pointer["release_id"] == first.release_id
 
 
 @pytest.mark.parametrize("tamper", ["truncate", "reorder"])
@@ -764,6 +820,14 @@ def test_sealed_history_digest_rejects_archive_truncation_or_reordering(
     )
     second_pulse, second_manifest, _ = _write_publication(
         project, second.release_directory, date="2026-01-03"
+    )
+    second_pulse_path = project / second_pulse
+    second_pulse_path.write_text(
+        second_pulse_path.read_text(encoding="utf-8").replace(
+            "a candidate acquired a sealed report",
+            "the successor candidate acquired a distinct sealed report",
+        ),
+        encoding="utf-8",
     )
     publish_release(
         project,

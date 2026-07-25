@@ -273,6 +273,29 @@ def test_automatic_package_rejects_candidate_hash_mismatch_without_writes(
     assert not (root / "public" / "artifacts").exists()
 
 
+def test_automatic_package_rejects_source_version_in_accepted_release(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    release_path = "data/releases/release-11111111111111111111"
+    sources = root / release_path / "sources.jsonl"
+    sources.parent.mkdir(parents=True)
+    sources.write_text(json.dumps(package["source"]) + "\n", encoding="utf-8")
+
+    with pytest.raises(PublicationError, match="source version is already accepted"):
+        load_and_materialize_automatic_package(
+            root,
+            DATE,
+            batch_id=BATCH_ID,
+            candidates=[candidate],
+            checkpoint={"release_path": release_path},
+        )
+
+    assert not (root / "public" / "artifacts").exists()
+    assert not (root / "data" / "automatic" / "extracts").exists()
+
+
 def test_automatic_generated_image_requires_exact_source_page_brief(
     tmp_path: Path,
 ) -> None:

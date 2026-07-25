@@ -229,6 +229,64 @@ def test_search_writes_private_receipt_public_safe_batch_and_deduplicates(
     assert third == second
 
 
+def test_search_excludes_source_version_already_in_accepted_release(
+    tmp_path: Path,
+) -> None:
+    first, _ = run_search(tmp_path, atom_feed())
+    candidate = json.loads((tmp_path / first["batch_path"]).read_text())["candidates"][0]
+    release_path = "data/releases/release-11111111111111111111"
+    sources_path = tmp_path / release_path / "sources.jsonl"
+    sources_path.parent.mkdir(parents=True)
+    sources_path.write_text(
+        json.dumps(
+            {
+                "id": "src-external-arxiv-2607-12345v2",
+                "url": candidate["canonical_url"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    pointer = tmp_path / "data" / "current.json"
+    pointer.write_text(json.dumps({"release_path": release_path}) + "\n", encoding="utf-8")
+
+    second, _ = run_search(tmp_path, atom_feed())
+
+    assert second["status"] == "no_candidates"
+    assert second["candidate_count"] == 0
+    assert second["already_seen_count"] == 1
+    assert second["accepted_filtered_count"] == 1
+    batch = json.loads((tmp_path / second["batch_path"]).read_text())
+    assert batch["candidates"] == []
+
+
+def test_search_keeps_new_arxiv_version_when_prior_version_is_accepted(
+    tmp_path: Path,
+) -> None:
+    release_path = "data/releases/release-11111111111111111111"
+    sources_path = tmp_path / release_path / "sources.jsonl"
+    sources_path.parent.mkdir(parents=True)
+    sources_path.write_text(
+        json.dumps(
+            {
+                "id": "src-external-arxiv-2607-12345v1",
+                "url": "https://arxiv.org/abs/2607.12345v1",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    pointer = tmp_path / "data" / "current.json"
+    pointer.write_text(json.dumps({"release_path": release_path}) + "\n", encoding="utf-8")
+
+    result, _ = run_search(tmp_path, atom_feed())
+
+    assert result["candidate_count"] == 1
+    assert result["accepted_filtered_count"] == 0
+    batch = json.loads((tmp_path / result["batch_path"]).read_text())
+    assert batch["candidates"][0]["versioned_external_id"] == "2607.12345v2"
+
+
 def test_crossref_journal_candidate_is_literature_first_and_public_safe(
     tmp_path: Path,
 ) -> None:

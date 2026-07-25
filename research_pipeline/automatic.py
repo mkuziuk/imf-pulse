@@ -22,6 +22,10 @@ from typing import Any, Mapping, Sequence
 from pypdf import PdfReader
 
 from .errors import PublicationError
+from .external_identity import (
+    accepted_external_identities,
+    normalize_external_identity,
+)
 from .hashing import canonical_json_bytes, canonical_json_hash, sha256_file
 from .paths import open_regular_file_under_root
 from .pulse_builder import seal_proposal, validate_proposal
@@ -809,6 +813,15 @@ def load_and_materialize_automatic_package(
     if package.get("date") != run_date:
         raise PublicationError("automatic editorial package date does not match the run")
     candidate = _candidate_for_package(package, batch_id, candidates)
+    candidate_identity = normalize_external_identity(candidate.get("canonical_url"))
+    try:
+        accepted_identities = accepted_external_identities(project_root, checkpoint)
+    except Exception as exc:
+        raise PublicationError("accepted external source history is invalid") from exc
+    if candidate_identity is None or candidate_identity in accepted_identities:
+        raise PublicationError(
+            "automatic editorial candidate source version is already accepted"
+        )
     reviewed_rights = _reviewed_candidate_rights(project_root, candidate)
     source, units, _ = _validate_package_semantics(
         project_root, package, candidate, reviewed_rights

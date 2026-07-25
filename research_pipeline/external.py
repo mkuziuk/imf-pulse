@@ -43,6 +43,10 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .config import load_yaml
+from .external_identity import (
+    accepted_external_identities,
+    normalize_external_identity,
+)
 from .hashing import canonical_json_bytes, canonical_json_hash
 from .paths import ensure_directory_under_root, validate_relative_path
 from .validation import strict_json_loads
@@ -1508,13 +1512,29 @@ def run_external_search(
         )
 
     merged = _merge_candidates(parsed_candidates)
+    try:
+        accepted_identities = accepted_external_identities(project_root)
+    except Exception as exc:
+        raise ExternalMonitoringError(
+            "accepted external source history is unavailable or invalid"
+        ) from exc
     seen, maximum_seen_versions = _seen_candidate_versions(
         project_root, policy["candidate_batch_root"]
     )
     new_candidates: list[dict[str, Any]] = []
     already_seen_count = 0
+    accepted_filtered_count = 0
     for candidate in merged:
         identity = (candidate["id"], candidate["candidate_sha256"])
+        external_identity = normalize_external_identity(candidate["canonical_url"])
+        if external_identity is None:
+            raise ExternalMonitoringError("candidate canonical URL has no external identity")
+        if external_identity in accepted_identities:
+            # An accepted exact source version is terminal discovery state.
+            # Exclude it before an editor can fetch and review the same PDF.
+            already_seen_count += 1
+            accepted_filtered_count += 1
+            continue
         if candidate["version"] < maximum_seen_versions.get(candidate["id"], 0):
             already_seen_count += 1
             continue
@@ -1562,6 +1582,7 @@ def run_external_search(
         "batch_path": batch_path.relative_to(project_root).as_posix(),
         "candidate_count": len(new_candidates),
         "already_seen_count": already_seen_count,
+        "accepted_filtered_count": accepted_filtered_count,
         "receipt_paths": sorted(set(receipt_paths)),
     }
 

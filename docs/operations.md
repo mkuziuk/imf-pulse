@@ -127,6 +127,15 @@ Use `--decision rejected` when appropriate. Add `--public-distribution` only whe
 
 ### Automatic arXiv evidence path
 
+Before choosing or fetching a candidate, build the read-only accepted-history context:
+
+```bash
+.venv/bin/python scripts/build_editorial_context.py \
+  --project-root "$PROJECT_ROOT"
+```
+
+The command verifies accepted pulse paths and hashes and summarizes their source versions, knowledge, topics, signals, and unresolved questions. Treat it as required context, not publication authority. Compare the candidate batch with this index, then read full bodies only for the prior pulses you judge most similar. Proceed only for a distinct method, result, experiment, contradiction, or open question.
+
 The unattended editor may choose at most one exact arXiv candidate and fetch its official primary PDF into private ignored storage:
 
 ```bash
@@ -137,7 +146,7 @@ The unattended editor may choose at most one exact arXiv candidate and fetch its
   --candidate-sha256 CANDIDATE_SHA256
 ```
 
-The helper rejects non-arXiv candidates, redirects, oversized responses, unexpected content types, and non-PDF bytes. The editor then follows `prompts/automatic-editor.md` and writes one ignored `data/automatic/packages/YYYY-MM-DD.json` conforming to `schemas/automatic-pulse-package.schema.json`. `research_pipeline/automatic.py` revalidates the exact candidate, private PDF hash and structure, page extracts, evidence links, append-only knowledge, deterministic novelty fingerprints, pulse text, and every selected explanatory artifact before any accepted file changes. Private generated images and rights-cleared source-figure extracts are staged beneath `tmp/automatic-visuals/` and bound by exact hash. A generated surrogate must also bind the exact source page that informed its brief and declare the `scientific-content-faithful_visual-form-original` policy: scientific semantics may be preserved precisely, but protected pixels, numerical samples, labels, color maps, and figure composition may not be copied. Do not put PDFs or extracted page text in Git or `public-release/`.
+The helper rejects non-arXiv candidates, redirects, oversized responses, unexpected content types, and non-PDF bytes. Accepted source versions are removed before batch creation and rejected again during package validation. The editor follows `prompts/automatic-editor.md` and writes at most one ignored `data/automatic/packages/YYYY-MM-DD.json` conforming to `schemas/automatic-pulse-package.schema.json`. `research_pipeline/automatic.py` revalidates the exact candidate, accepted-source exclusion, private PDF hash and structure, page extracts, evidence links, append-only knowledge, deterministic novelty fingerprints, pulse text, and every selected explanatory artifact before any accepted file changes. Private generated images and rights-cleared source-figure extracts are staged beneath `tmp/automatic-visuals/` and bound by exact hash. A generated surrogate must also bind the exact source page that informed its brief and declare the `scientific-content-faithful_visual-form-original` policy: scientific semantics may be preserved precisely, but protected pixels, numerical samples, labels, color maps, and figure composition may not be copied. Do not put PDFs or extracted page text in Git or `public-release/`.
 
 Compare manually prepared controlled knowledge profiles with:
 
@@ -175,7 +184,7 @@ The command emits one JSON result:
 
 Exit status is zero for `published`, `no_update`, and `review_required`; it is nonzero for `blocked` and `failed`. Use the JSON fields `release_advanced` and `checkpoint_refreshed` rather than inferring state from a source hash or timestamp.
 
-An automatic package is single-use staging. Once its indexed pulse appears in the sealed accepted-publication history, same-day reruns ignore the leftover private package and cannot publish that automatic package again. A separately reviewed proposal with the next index may publish another pulse on the same date when it is bound to a new evidence release and passes every gate. An unconsumed package always remains subject to the current fail-closed schema and evidence checks.
+An automatic package is single-use staging. Once its dated pulse appears in the sealed accepted-publication history, same-day reruns ignore it. Accepted source versions and duplicate report bodies are independently rejected. An unconsumed package always remains subject to the current fail-closed schema and evidence checks.
 
 ### Scheduled task boundary
 
@@ -184,7 +193,7 @@ The Codex desktop scheduled task is configured outside the repository with these
 - schedule: daily at 08:00 `Europe/Moscow`;
 - target: `$PROJECT_ROOT`;
 - mode: standalone local run;
-- editorial preparation: search once, inspect at most one exact arXiv primary PDF, and create at most one schema-valid automatic package;
+- editorial preparation: search once, read sealed publication context, inspect at most one exact arXiv primary PDF, and create at most one schema-valid automatic package;
 - search handoff: pass `--scheduled-outcome-date "$DATE"`; the wrapper consumes the resulting hash-bound private outcome without repeating provider requests;
 - timeout behavior: a provider read timeout is deferred as `no_update`; validation, identity, rights, and other safety failures still fail closed;
 - transaction command: `.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE"` exactly once;
