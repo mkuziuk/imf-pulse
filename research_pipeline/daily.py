@@ -277,7 +277,7 @@ def _default_load_context(project_root: Path, mode: str, run_date: str) -> Daily
     publication = scheduling.get("publication") if isinstance(scheduling, Mapping) else None
     if not isinstance(scheduling, Mapping) or (
         scheduling.get("timezone") != "Europe/Moscow"
-        or scheduling.get("local_time") != "08:00"
+        or scheduling.get("local_time") != "06:00"
         or scheduling.get("execution_environment") != "local"
         or scheduling.get("commit_push_or_deploy") is not True
         or not isinstance(publication, Mapping)
@@ -286,7 +286,7 @@ def _default_load_context(project_root: Path, mode: str, run_date: str) -> Daily
         or publication.get("require_clean_worktree") is not True
     ):
         raise DailyBlockedError(
-            "scheduling must remain local at 08:00 Europe/Moscow with guarded published-only deployment"
+            "scheduling must remain local at 06:00 Europe/Moscow with guarded published-only deployment"
         )
     product = pulse.get("product")
     if not isinstance(product, Mapping) or product.get("timezone") != "Europe/Moscow":
@@ -467,7 +467,7 @@ def _default_monitor_external(context: DailyContext) -> ExternalOutcome:
     from .external import run_external_search
 
     config_path = context.project_root / "config" / "external-sources.yaml"
-    as_of = f"{context.date}T08:00:00+03:00"
+    as_of = f"{context.date}T06:00:00+03:00"
     result = run_external_search(config_path, context.project_root, as_of)
     batch_relative = _safe_relative(str(result["batch_path"]), "external batch path")
     return _external_outcome_from_batch(

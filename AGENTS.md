@@ -24,7 +24,7 @@
 
 - `scripts/run_daily_pipeline.py` is the only publication transaction entry point. It may publish at most one automatically verified pulse; otherwise it must return `no_update` without fabricating a report.
 - Advance the release pointer only after schema, citation, cross-reference, rights, Python-test, frontend-test, and production-build gates succeed.
-- The scheduled task runs `scripts/run_scheduled_pipeline.py` locally at 08:00 `Europe/Moscow`. That wrapper must run the daily transaction exactly once.
+- The scheduled task runs `scripts/run_scheduled_pipeline.py` locally at 06:00 `Europe/Moscow`. That wrapper must run the daily transaction exactly once.
 - Only a schema-valid `published` result may enter the guarded Git path. The wrapper requires clean, synchronized `main`, the exact approved `origin`, a strict current-date public-file allowlist, a successful public export/audit, and a successful GitHub Pages workflow. It may create one non-force commit and push only that commit.
 - `no_update`, `review_required`, `blocked`, and `failed` results must never stage, commit, push, or deploy. Automatic preparation lives only in ignored private staging until the wrapper validates and materializes it. The wrapper must never tag, open a pull request, change GitHub settings, force-push, or touch the source repository.
 - A Pages build may read only the audited, hash-bound `public-release/` export. Content-only pulse pushes may skip the duplicate full Python suite in GitHub Actions because that suite already passed inside the local publication transaction; public audit, frontend tests, and the production build remain mandatory.

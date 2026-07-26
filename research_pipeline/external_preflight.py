@@ -52,7 +52,7 @@ def _canonical_as_of(value: str) -> str:
 
 
 def _expected_as_of(run_date: str) -> str:
-    return _canonical_as_of(f"{run_date}T08:00:00+03:00")
+    return _canonical_as_of(f"{run_date}T06:00:00+03:00")
 
 
 def _identity_payload(outcome: Mapping[str, Any]) -> dict[str, Any]:
@@ -176,7 +176,7 @@ def write_scheduled_search_outcome(
     canonical_as_of = _canonical_as_of(as_of)
     if canonical_as_of != _expected_as_of(run_date):
         raise ExternalPreflightError(
-            "scheduled outcome cutoff must be 08:00 Europe/Moscow on its date"
+            "scheduled outcome cutoff must be 06:00 Europe/Moscow on its date"
         )
     if status not in {"ready", "deferred", "failed"}:
         raise ExternalPreflightError("scheduled outcome status is invalid")

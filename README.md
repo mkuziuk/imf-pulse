@@ -10,7 +10,7 @@ The MVP implements all five planned phases without introducing a crawler, applic
 - read-only, hash-addressed ingestion of explicitly allowlisted local research;
 - deterministic change analysis, novelty ranking, and fail-closed automatic pulse proposals;
 - bounded arXiv and Crossref monitoring for preprints, journal papers, proceedings, books, and chapters, with immutable receipts and exact-hash review decisions;
-- one transactional daily command plus a guarded local publisher scheduled for 08:00 `Europe/Moscow`.
+- one transactional daily command plus a guarded local publisher scheduled for 06:00 `Europe/Moscow`.
 
 The system is deliberately conservative. A new source or changed hash is not automatically news. Primary external literature has editorial priority; local IMF changes provide supporting, reproducing, or contradicting context. Unresolved metadata is deferred rather than blocking a run. The scheduled editor may inspect at most one exact arXiv paper through the guarded PDF helper, but publication proceeds only when the candidate hash, PDF hash, page locators, append-only knowledge records, novelty selection, prose, artifact, and every release gate agree. Crossref-only records and uncertain evidence are skipped.
 
@@ -126,7 +126,7 @@ It emits one compact JSON object:
 | `blocked` | A required reviewed configuration, executable, source root, or permission is unavailable. |
 | `failed` | A processing or validation gate failed; the accepted checkpoint is preserved. |
 
-The daily research command itself never runs Git. The independent 08:00 `Europe/Moscow` Codex task calls the guarded wrapper instead:
+The daily research command itself never runs Git. The independent 06:00 `Europe/Moscow` Codex task calls the guarded wrapper instead:
 
 ```bash
 .venv/bin/python scripts/run_scheduled_pipeline.py \

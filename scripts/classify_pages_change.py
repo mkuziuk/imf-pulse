@@ -16,7 +16,10 @@ SAFE_TAIL = r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*"
 CONTENT_PATHS = (
     re.compile(rf"^content/pulses/{DATE}\.md$"),
     re.compile(rf"^public/artifacts/{DATE}/{SAFE_TAIL}$"),
-    re.compile(r"^knowledge/curated/(?:claims|experiments|methods|relationships)\.jsonl$"),
+    re.compile(
+        r"^knowledge/curated/"
+        r"(?:claims|experiments|methods|relationships|sources)\.jsonl$"
+    ),
     re.compile(r"^public-release/(?:current|manifest)\.json$"),
     re.compile(
         r"^public-release/knowledge/"

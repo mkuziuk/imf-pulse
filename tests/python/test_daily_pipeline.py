@@ -213,7 +213,7 @@ def test_scheduled_metadata_timeout_is_deferred_without_a_second_search(
     outcome_path = write_scheduled_search_outcome(
         project,
         run_date=RUN_DATE,
-        as_of=f"{RUN_DATE}T08:00:00+03:00",
+        as_of=f"{RUN_DATE}T06:00:00+03:00",
         status="deferred",
         reason="arxiv query arxiv-iterative-filtering timed out",
     )

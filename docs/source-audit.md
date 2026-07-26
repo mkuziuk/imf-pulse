@@ -34,7 +34,7 @@ Each candidate version remains pending until an operator appends an `approved` o
 
 ## Scheduled-environment fallback
 
-The 08:00 `Europe/Moscow` task runs locally and expects live read access to `$IMF_SOURCE_ROOT`. If access is unavailable, the daily command returns `blocked`; it does not broaden permissions or silently switch inputs.
+The 06:00 `Europe/Moscow` task runs locally and expects live read access to `$IMF_SOURCE_ROOT`. If access is unavailable, the daily command returns `blocked`; it does not broaden permissions or silently switch inputs.
 
 An authorized operator can run `scripts/export_local_snapshot.py --source-root "$IMF_SOURCE_ROOT"` to create an explicit private fallback snapshot. Any later manual processing must select that snapshot explicitly, verify its manifest, and report its age. A stale snapshot must never be described as a fresh live scan.
 

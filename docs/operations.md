@@ -100,7 +100,7 @@ Run the configured arXiv and Crossref literature queries at a deterministic cuto
 ```bash
 .venv/bin/python scripts/search_external_sources.py \
   --project-root "$PROJECT_ROOT" \
-  --as-of 2026-07-23T08:00:00+03:00
+  --as-of 2026-07-23T06:00:00+03:00
 ```
 
 The command writes private immutable Atom or JSON receipts beneath `tmp/external-receipts/` and a normalized batch beneath `data/external/batches/`. It does not copy abstracts into the batch or download PDFs, supplementary files, or code. Metadata is discovery material only. An unresolved exact candidate is carried into later batches without blocking the daily transaction; once its exact hash has an approval or rejection, that record is deduplicated.
@@ -190,7 +190,7 @@ An automatic package is single-use staging. Once its dated pulse appears in the 
 
 The Codex desktop scheduled task is configured outside the repository with these fixed properties:
 
-- schedule: daily at 08:00 `Europe/Moscow`;
+- schedule: daily at 06:00 `Europe/Moscow`;
 - target: `$PROJECT_ROOT`;
 - mode: standalone local run;
 - editorial preparation: search once, read sealed publication context, inspect at most one exact arXiv primary PDF, and create at most one schema-valid automatic package;
@@ -225,7 +225,7 @@ npm run build
 
 Never force-add ignored private snapshots, releases, receipts, run logs, or build caches. A push to `main` starts `.github/workflows/pages.yml`; an operator can also dispatch it explicitly. The workflow always audits the public boundary, runs frontend tests, builds without source maps, and deploys only `dist/`. It skips the full Python suite only when a fail-closed diff classifier proves that every change is an added or modified approved content file. Code, configuration, workflow, deletion, rename, initial-history, and manual-dispatch cases run the full suite.
 
-The daily research pipeline never runs Git or GitHub commands. The scheduled wrapper owns the narrow publication boundary. Before doing research it requires a clean `main` exactly equal to `origin/main` and authenticated GitHub CLI access. After `published`, it exports and audits `public-release/`, accepts only the current dated pulse/artifacts, four curated knowledge JSONL files, and sealed public export files, then stages those exact regular files. It aborts on deletions, renames, symlinks, unrelated changes, an origin race, failed push, or failed deployment. A failure after commit intentionally leaves the local commit for operator inspection; the next run blocks until local and remote state is reconciled.
+The daily research pipeline never runs Git or GitHub commands. The scheduled wrapper owns the narrow publication boundary. Before doing research it requires a clean `main` exactly equal to `origin/main` and authenticated GitHub CLI access. After `published`, it exports and audits `public-release/`, accepts only the current dated pulse/artifacts, five curated knowledge JSONL files, and sealed public export files, then stages those exact regular files. It aborts on deletions, renames, symlinks, unrelated changes, an origin race, failed push, or failed deployment. A failure after commit intentionally leaves the local commit for operator inspection; the next run blocks until local and remote state is reconciled.
 
 ## Rights checklist
 

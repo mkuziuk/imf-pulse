@@ -117,7 +117,7 @@ external_monitoring:
 scheduling:
   enabled: true
   timezone: Europe/Moscow
-  local_time: "08:00"
+  local_time: "06:00"
   execution_environment: local
   commit_push_or_deploy: true
   publication:

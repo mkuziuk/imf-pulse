@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--scheduled-outcome-date",
         help=(
             "Write the private hash-bound handoff consumed by the scheduled wrapper; "
-            "must match the 08:00 Europe/Moscow cutoff"
+            "must match the 06:00 Europe/Moscow cutoff"
         ),
     )
     return parser

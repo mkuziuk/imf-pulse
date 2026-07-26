@@ -21,7 +21,7 @@ from research_pipeline.hashing import canonical_json_bytes, canonical_json_hash
 
 
 RUN_DATE = "2026-07-23"
-AS_OF = f"{RUN_DATE}T08:00:00+03:00"
+AS_OF = f"{RUN_DATE}T06:00:00+03:00"
 
 
 def _project(tmp_path: Path, repository_root: Path) -> Path:
@@ -36,7 +36,7 @@ def _project(tmp_path: Path, repository_root: Path) -> Path:
 def _batch(project: Path) -> tuple[str, dict[str, object]]:
     batch: dict[str, object] = {
         "schema_version": "1.0.0",
-        "as_of": "2026-07-23T05:00:00Z",
+        "as_of": "2026-07-23T03:00:00Z",
         "status": "no_candidates",
         "metadata_only": True,
         "queries": [

@@ -48,7 +48,7 @@ Published papers, scholarly books, and chapters precede preprints and local rese
 - Preflight requires the source, external, report, extraction, automatic-editorial, and scheduling policies. The command acquires a non-blocking local lock, reads the checkpoint, monitors literature first, defers unresolved metadata, syncs allowlisted local context, validates any exact automatic package, builds a candidate release, performs novelty analysis, and invokes the existing atomic publisher.
 - The stable result contract is `published`, `no_update`, `review_required`, `blocked`, or `failed`, with run/release identity, checkpoint effects, evidence IDs, and pending-review path.
 - Pending external candidates never stop the run. A verified package must match the exact deterministic selection; otherwise it fails closed. A local evidence change without a selected package advances without a pulse. No-update runs create no report.
-- The Codex desktop scheduled task runs independently at 08:00 `Europe/Moscow` in local mode and invokes `scripts/run_scheduled_pipeline.py` once.
+- The Codex desktop scheduled task runs independently at 06:00 `Europe/Moscow` in local mode and invokes `scripts/run_scheduled_pipeline.py` once.
 - The wrapper validates the daily JSON result. Only `published` can pass clean-branch, synchronized-origin, exact-path, public-export, and public-audit gates before one non-force commit/push and a wait for the matching Pages workflow.
 - Every other result performs no Git operation. The wrapper cannot tag, open a pull request, force-push, change hosting settings, or modify the sibling source repository.
 

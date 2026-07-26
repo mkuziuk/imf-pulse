@@ -7,6 +7,7 @@ def test_content_only_publication_uses_fast_path() -> None:
             ("A", "content/pulses/2026-07-23.md"),
             ("A", "public/artifacts/2026-07-23/chart/chart.svg"),
             ("M", "knowledge/curated/claims.jsonl"),
+            ("M", "knowledge/curated/sources.jsonl"),
             ("M", "public-release/current.json"),
             ("M", "public-release/manifest.json"),
             ("A", "public-release/pulses/2026-07-23.md"),
