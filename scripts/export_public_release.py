@@ -136,6 +136,7 @@ CURRENT_PUBLIC_FIELDS = {
     "accepted_artifact_manifests",
     "latest_accepted_artifact_manifests",
     "pulse_artifact_supplements",
+    "pulse_reader_guides",
 }
 
 
@@ -500,8 +501,10 @@ def _public_current(
     current: Mapping[str, Any],
     accepted: list[dict[str, Any]],
     supplements: Mapping[str, list[str]] | None = None,
+    reader_guides: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     supplements = supplements or {}
+    reader_guides = reader_guides or {}
     accepted_pulses = [item["pulse"] for item in accepted]
     artifact_urls: list[str] = []
     for publication in accepted:
@@ -541,6 +544,8 @@ def _public_current(
         summary["pulse_artifact_supplements"] = {
             pulse_id: list(urls) for pulse_id, urls in sorted(supplements.items())
         }
+    if reader_guides:
+        summary["pulse_reader_guides"] = dict(sorted(reader_guides.items()))
     for field in ("updated_at", "published_at", "last_checked_at"):
         if isinstance(current.get(field), str):
             summary[field] = current[field]
@@ -735,6 +740,71 @@ def _manual_supplement_payloads(
     return payloads, mapping
 
 
+def _manual_reader_guides(
+    project_root: Path, accepted: list[dict[str, Any]]
+) -> dict[str, str]:
+    """Load owner-approved plain-language guides bound to immutable pulse bytes."""
+
+    path = project_root / "config" / "pulse-reader-guides.json"
+    if not path.exists():
+        return {}
+    root = _strict_json(_read_stable(path, path.relative_to(project_root).as_posix()), str(path))
+    if not isinstance(root, dict) or set(root) != {"schema_version", "guides"}:
+        raise PublicReleaseError("pulse reader-guide registry has an unexpected field set")
+    if root.get("schema_version") != 1 or not isinstance(root.get("guides"), list):
+        raise PublicReleaseError("pulse reader-guide registry identity is invalid")
+
+    accepted_by_pulse = {item["pulse"]: item for item in accepted}
+    expected_fields = {
+        "id",
+        "pulse_id",
+        "pulse_path",
+        "pulse_sha256",
+        "owner_approved",
+        "reason",
+        "orientation",
+    }
+    seen_ids: set[str] = set()
+    guides: dict[str, str] = {}
+    for row in root["guides"]:
+        if not isinstance(row, dict) or set(row) != expected_fields:
+            raise PublicReleaseError("pulse reader guide has an unexpected field set")
+        guide_id = row.get("id")
+        if (
+            not isinstance(guide_id, str)
+            or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", guide_id)
+            or guide_id in seen_ids
+        ):
+            raise PublicReleaseError("pulse reader-guide id is invalid or duplicated")
+        seen_ids.add(guide_id)
+        pulse_path = row.get("pulse_path")
+        publication = accepted_by_pulse.get(pulse_path)
+        if not isinstance(pulse_path, str) or publication is None:
+            raise PublicReleaseError("pulse reader guide targets an unaccepted pulse")
+        pulse_id = row.get("pulse_id")
+        if pulse_id != _pulse_id_for_path(pulse_path) or pulse_id in guides:
+            raise PublicReleaseError("pulse reader guide pulse id/path disagree or duplicate")
+        pulse_sha = row.get("pulse_sha256")
+        if pulse_sha != publication.get("pulse_sha256"):
+            raise PublicReleaseError("pulse reader guide pulse hash is stale")
+        _read_project_bound_file(project_root, publication["bound_pulse"], str(pulse_sha))
+        if row.get("owner_approved") is not True:
+            raise PublicReleaseError("pulse reader guide lacks project-owner approval")
+        reason = row.get("reason")
+        orientation = row.get("orientation")
+        if not isinstance(reason, str) or len(reason.strip()) < 20 or len(reason) > 500:
+            raise PublicReleaseError("pulse reader-guide reason is incomplete")
+        if (
+            not isinstance(orientation, str)
+            or not 80 <= len(orientation) <= 900
+            or orientation != " ".join(orientation.split())
+            or any(ord(character) < 32 for character in orientation)
+        ):
+            raise PublicReleaseError("pulse reader-guide orientation is invalid")
+        guides[pulse_id] = orientation
+    return guides
+
+
 def _artifact_references(manifest: Mapping[str, Any], manifest_relative: str) -> set[str]:
     directory = PurePosixPath(manifest_relative).parent
     references = {manifest_relative}
@@ -897,6 +967,20 @@ def audit_public_release(directory: Path) -> dict[str, Any]:
                 raise PublicReleaseError("public pulse artifact supplement manifest is invalid")
             supplement_pulse_by_manifest[relative] = pulse_id
 
+    raw_reader_guides = current.get("pulse_reader_guides", {})
+    if not isinstance(raw_reader_guides, dict):
+        raise PublicReleaseError("public pulse reader guides must be an object")
+    for pulse_id, orientation in raw_reader_guides.items():
+        if pulse_id not in accepted_pulse_ids:
+            raise PublicReleaseError("public pulse reader guide targets an unknown pulse")
+        if (
+            not isinstance(orientation, str)
+            or not 80 <= len(orientation) <= 900
+            or orientation != " ".join(orientation.split())
+            or any(ord(character) < 32 for character in orientation)
+        ):
+            raise PublicReleaseError("public pulse reader-guide orientation is invalid")
+
     referenced_artifacts: set[str] = set()
     for manifest_relative in sorted(actual_manifest_files):
         artifact = _strict_json(files[manifest_relative], manifest_relative)
@@ -1002,13 +1086,16 @@ def export_public_release(project_root: Path, output: str) -> dict[str, Any]:
     payloads = _sanitize_knowledge(parsed)
     payloads.update(_publication_payloads(project_root, accepted))
     supplement_payloads, supplements = _manual_supplement_payloads(project_root, accepted)
+    reader_guides = _manual_reader_guides(project_root, accepted)
     collisions = set(payloads).intersection(supplement_payloads)
     if collisions:
         raise PublicReleaseError(
             f"supplement artifacts collide with accepted publication bytes: {sorted(collisions)}"
         )
     payloads.update(supplement_payloads)
-    payloads["current.json"] = _json_bytes(_public_current(current, accepted, supplements))
+    payloads["current.json"] = _json_bytes(
+        _public_current(current, accepted, supplements, reader_guides)
+    )
     for relative, payload in payloads.items():
         if not _allowed_public_path(relative):
             raise PublicReleaseError(f"export attempted a forbidden public path: {relative}")

@@ -95,7 +95,8 @@ const PUBLIC_CURRENT_FIELDS = new Set([
   "accepted_pulses",
   "accepted_artifact_manifests",
   "latest_accepted_artifact_manifests",
-  "pulse_artifact_supplements"
+  "pulse_artifact_supplements",
+  "pulse_reader_guides"
 ]);
 const PUBLIC_KNOWLEDGE_NAMES = [
   "sources.jsonl",
@@ -487,6 +488,22 @@ function selectPublicReleaseSnapshot(projectRoot: string, configured: string): A
         throw new Error("A pulse artifact supplement manifest is invalid or duplicated.");
       }
       supplementPulseByManifest.set(url, pulseId);
+    }
+  }
+  const rawReaderGuides = current.pulse_reader_guides ?? {};
+  if (!isRecord(rawReaderGuides)) {
+    throw new Error("pulse_reader_guides must be an object.");
+  }
+  for (const [pulseId, orientation] of Object.entries(rawReaderGuides)) {
+    if (
+      !acceptedPulseIds.has(pulseId) ||
+      typeof orientation !== "string" ||
+      orientation.length < 80 ||
+      orientation.length > 900 ||
+      orientation.trim().replace(/\s+/g, " ") !== orientation ||
+      /[\u0000-\u001f\u007f]/.test(orientation)
+    ) {
+      throw new Error("A pulse reader guide is invalid or targets an unknown pulse.");
     }
   }
   const expectedManifestRelatives = new Set(

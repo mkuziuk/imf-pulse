@@ -83,6 +83,10 @@ function writePublicReleaseFixture(
     accepted_pulses: [`content/pulses/${date}.md`],
     accepted_artifact_manifests: [manifestUrl],
     latest_accepted_artifact_manifests: [manifestUrl],
+    pulse_reader_guides: {
+      [`pulse-${date}`]:
+        "A plain-language orientation explains the accepted report without altering its immutable source bytes."
+    },
     last_checked_at: checkpointTimestamp
   });
   const files: Record<string, string> = {

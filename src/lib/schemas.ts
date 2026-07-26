@@ -324,6 +324,7 @@ export const CurrentReleaseSchema = z
     accepted_artifact_manifests: StringListSchema.default([]),
     latest_accepted_artifact_manifests: StringListSchema.default([]),
     pulse_artifact_supplements: z.record(z.string(), StringListSchema).default({}),
+    pulse_reader_guides: z.record(z.string(), nonEmptyString).default({}),
     accepted_publications: z.array(AcceptedPublicationSchema).default([]),
     accepted_publications_sha256: Sha256Schema.optional(),
     bound_pulse: BoundPublicationPathSchema.optional(),

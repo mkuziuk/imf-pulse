@@ -214,6 +214,8 @@ The private release tree is never a deployment input. Refresh and audit the seal
 
 The exporter atomically replaces a direct project child only. Its manifest allowlists and hashes the sanitized current summary, five knowledge JSONL files, accepted pulses, and cleared artifact files. The audit rejects extra nodes, symlinks, raw/private fields, machine home paths, credential-like values, and unknown-rights media.
 
+Accepted pulse Markdown remains immutable. An owner may add a short, plain-language orientation for an existing pulse in `config/pulse-reader-guides.json`; each guide must be explicitly approved and bound to that pulse's accepted path and SHA-256. The exporter includes valid guides in the sanitized current summary, and the site presents them as optional reading help without changing or replacing the accepted report.
+
 Reproduce the Pages build locally:
 
 ```bash

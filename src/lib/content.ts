@@ -12,6 +12,7 @@ export interface PulseDocument {
   pulseIndex: number;
   title: string;
   lead: string;
+  readerGuide?: string;
   status: "published" | "draft" | "preview";
   topics: string[];
   featuredArtifact?: string;
@@ -283,7 +284,11 @@ export function selectPulseCatalog(
       (pulse): pulse is PulseDocument =>
         pulse != null && pulse.status === "published" && pulse.issues.length === 0
     )
-    .sort(comparePulseDates);
+    .sort(comparePulseDates)
+    .map((pulse) => {
+      const readerGuide = current.pulse_reader_guides[pulse.id];
+      return readerGuide ? { ...pulse, readerGuide } : pulse;
+    });
   const latest = latestReference
     ? findPulseByReference(acceptedPulses, latestReference)
     : undefined;

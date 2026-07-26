@@ -16,7 +16,7 @@ export function ArchivePage() {
     return pulses.filter((pulse) => {
       const matchesQuery =
         !normalizedQuery ||
-        `${pulse.title} ${pulse.lead} ${pulse.topics.join(" ")}`
+        `${pulse.title} ${pulse.lead} ${pulse.readerGuide ?? ""} ${pulse.topics.join(" ")}`
           .toLowerCase()
           .includes(normalizedQuery);
       const matchesTopic = topic === "all" || pulse.topics.includes(topic);

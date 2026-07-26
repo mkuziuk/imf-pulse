@@ -79,6 +79,12 @@ export function LatestPage() {
         <div className="pulse-header__body">
           <h1 id="pulse-title">{pulse.title}</h1>
           <p className="pulse-lead">{pulse.lead}</p>
+          {pulse.readerGuide ? (
+            <aside className="reader-orientation" aria-label="Reader orientation">
+              <p className="eyebrow">A quick orientation</p>
+              <p>{pulse.readerGuide}</p>
+            </aside>
+          ) : null}
           {pulse.topics.length > 0 ? (
             <ul className="topic-list" aria-label="Report topics">
               {pulse.topics.map((topic) => (

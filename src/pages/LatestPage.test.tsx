@@ -17,6 +17,7 @@ vi.mock("../lib/content", () => ({
       pulseIndex: 1,
       title: "A visual pulse",
       lead: "A plain-language lead introduces the research object.",
+      readerGuide: "This short orientation explains the central object before the technical report begins.",
       status: "published",
       topics: ["visual-test"],
       featuredArtifact: "featured-image",
@@ -96,6 +97,9 @@ describe("LatestPage visuals", () => {
       screen.getByRole("heading", { name: "Additional views of the topic" })
     ).toBeVisible();
     expect(screen.getByRole("heading", { name: "A second view" })).toBeVisible();
+    expect(screen.getByLabelText("Reader orientation")).toHaveTextContent(
+      "This short orientation explains the central object"
+    );
     expect(screen.getAllByText("Conceptual illustration — not research evidence")).toHaveLength(4);
   });
 });

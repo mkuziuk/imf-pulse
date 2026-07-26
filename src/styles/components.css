@@ -231,6 +231,25 @@
   line-height: 1.38;
 }
 
+.reader-orientation {
+  max-width: 42rem;
+  margin-top: 1.5rem;
+  padding: 1rem 0 0 1.1rem;
+  border-top: 1px solid var(--rule);
+  border-left: 2px solid var(--accent);
+}
+
+.reader-orientation .eyebrow {
+  margin: 0 0 0.45rem;
+}
+
+.reader-orientation > p:last-child {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
 .topic-list {
   display: flex;
   flex-wrap: wrap;

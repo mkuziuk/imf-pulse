@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "guides": [
+    {
+      "id": "reader-guide-2026-07-22",
+      "pulse_id": "pulse-2026-07-22",
+      "pulse_path": "content/pulses/2026-07-22.md",
+      "pulse_sha256": "ff7c7e80596df580667cee8423a6e46d12448293ca6319e119fc59d9f5c61295",
+      "owner_approved": true,
+      "reason": "Add a beginner-friendly orientation without rewriting the immutable accepted report.",
+      "orientation": "Start with the central distinction: ordinary W means one smoothing pass, while calligraphic W represents the full recursive operation. The pulse asks whether an error-rate claim about the first object was being used for the second, then checks the unusually large first-stage error with exact linear calculations and simulations."
+    },
+    {
+      "id": "reader-guide-2026-07-24",
+      "pulse_id": "pulse-2026-07-24",
+      "pulse_path": "content/pulses/2026-07-24.md",
+      "pulse_sha256": "dc8ac3ef7639dfa451f59fc75f6b95c8708c8ed64792ecb4ec7267e0080c9379",
+      "owner_approved": true,
+      "reason": "Add a beginner-friendly orientation without rewriting the immutable accepted report.",
+      "orientation": "Think of the data as a stack of maps observed over time. The method alternates between removing spatial patterns from each map and temporal patterns across the stack. The pulse explains why that order creates a new path for error to travel—and why adapting a filter to the data is not the same as making it resistant to outliers."
+    },
+    {
+      "id": "reader-guide-2026-07-26-1",
+      "pulse_id": "pulse-2026-07-26-1",
+      "pulse_path": "content/pulses/2026-07-26-1.md",
+      "pulse_sha256": "474c98d4e38d1ebc679e921c017c74854200d0148908bf1baff25463cf5c14a2",
+      "owner_approved": true,
+      "reason": "Add a beginner-friendly orientation without rewriting the immutable accepted report.",
+      "orientation": "The paper studies a modest target: estimating a curve at one chosen location from nearby observations. Large errors are prevented from dominating the fit, and the neighborhood size is selected by comparing answers across several scales. The pulse separates those guarantees for one local estimate from the harder question of repeating such estimates inside a recursive filter."
+    }
+  ]
+}

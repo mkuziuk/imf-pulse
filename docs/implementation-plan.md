@@ -58,6 +58,7 @@ The scheduling declaration in `config/pulse.yaml` is a reviewed policy prerequis
 
 - Private `imports/`, `data/releases/`, `data/runs/`, extracts, source documents, and build caches are excluded from Git and deployment.
 - `scripts/export_public_release.py` atomically constructs `public-release/` from the current validated release: sanitized current metadata, five knowledge JSONL files, accepted pulses, and cleared artifact files only.
+- `config/pulse-reader-guides.json` holds optional owner-approved plain-language orientations for existing reports. Each entry is bound to an accepted pulse path and SHA-256, so the public UI can become more approachable without rewriting immutable publication bytes.
 - `scripts/audit_public_release.py` verifies the manifest allowlist and every hash, rights decision, path, file type, and public-data rule. The Vite content plugin repeats the boundary at build time.
 - `.github/workflows/pages.yml` re-audits the public export, runs Vitest, builds with `/imf-pulse/` and hash routing, rejects source maps, and deploys only `dist/` through GitHub Pages. A fail-closed change classifier skips duplicate Pytest only for exact content-only pulse commits; all other changes and manual dispatches run it.
 - A guarded scheduled push, reviewed operator push, or explicit workflow dispatch can start publication. The research pipeline itself cannot trigger it.

@@ -71,6 +71,26 @@ describe("release pulse selection", () => {
     });
   });
 
+  it("attaches an owner-approved reader guide without changing accepted pulse bytes", () => {
+    const published = pulse("pulse-2026-07-22", "2026-07-22");
+    const orientation =
+      "A plain-language orientation explains the research object before preserving the accepted technical report exactly as published.";
+    const current = CurrentReleaseSchema.parse({
+      release_id: "release-reader-guide",
+      status: "published",
+      pulse: "content/pulses/2026-07-22.md",
+      latest_accepted_pulse: "content/pulses/2026-07-22.md",
+      accepted_pulses: ["content/pulses/2026-07-22.md"],
+      pulse_reader_guides: { [published.id]: orientation }
+    });
+
+    expect(selectPulseCatalog([published], current).latest).toMatchObject({
+      id: published.id,
+      readerGuide: orientation,
+      body: published.body
+    });
+  });
+
   it("accepts the real no-update pointer shape and retains the latest accepted pulse", () => {
     const retained = pulse("pulse-retained", "2026-07-22");
     const older = pulse("pulse-older", "2026-07-21");
