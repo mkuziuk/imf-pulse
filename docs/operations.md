@@ -148,6 +148,16 @@ The unattended editor may choose at most one exact arXiv candidate and fetch its
 
 The helper rejects non-arXiv candidates, redirects, oversized responses, unexpected content types, and non-PDF bytes. Accepted source versions are removed before batch creation and rejected again during package validation. The editor follows `prompts/automatic-editor.md` and writes at most one ignored `data/automatic/packages/YYYY-MM-DD.json` conforming to `schemas/automatic-pulse-package.schema.json`. `research_pipeline/automatic.py` revalidates the exact candidate, accepted-source exclusion, private PDF hash and structure, page extracts, evidence links, append-only knowledge, deterministic novelty fingerprints, pulse text, and every selected explanatory artifact before any accepted file changes. Private generated images and rights-cleared source-figure extracts are staged beneath `tmp/automatic-visuals/` and bound by exact hash. A generated surrogate must also bind the exact source page that informed its brief and declare the `scientific-content-faithful_visual-form-original` policy: scientific semantics may be preserved precisely, but protected pixels, numerical samples, labels, color maps, and figure composition may not be copied. Do not put PDFs or extracted page text in Git or `public-release/`.
 
+Before the one daily transaction, validate a prepared package without materializing accepted or public files:
+
+```bash
+.venv/bin/python scripts/validate_automatic_package.py \
+  --project-root "$PROJECT_ROOT" \
+  --date "$DATE"
+```
+
+The command reuses the dated hash-bound search outcome and emits `valid`, `no_package`, or `failed`. On a mechanical `failed` result, the scheduled editor may compare the precise error with the immutable candidate or PDF, repair only ignored private package or visual staging, and rerun this read-only check up to three times. Candidate batches, hashes, PDFs, accepted knowledge, and validation code remain immutable. If the package cannot be repaired exactly, it is moved without overwrite beneath ignored `data/automatic/rejected/` and removed from the deterministic dated package path. The guarded wrapper still runs exactly once, after the package is valid or absent; uncertainty becomes a safe no-package run rather than a reason to weaken a gate.
+
 Compare manually prepared controlled knowledge profiles with:
 
 ```bash
@@ -172,7 +182,7 @@ DATE="$(TZ=Europe/Moscow date +%F)"
   --date "$DATE"
 ```
 
-The scheduled editor performs metadata search with `--scheduled-outcome-date "$DATE"` and, when justified, prepares one automatic package before calling the transaction. That option replaces an ignored `data/automatic/external-search-outcomes/$DATE.json` handoff. A successful handoff binds the exact immutable batch ID and SHA-256; an arXiv or Crossref timeout records a batch-free deferred outcome. The wrapper consumes the handoff instead of issuing a second metadata search. A deferred timeout continues local processing and returns `no_update` when nothing else changed; malformed outcomes and non-timeout search failures remain fail-closed. Do not call synchronization, analysis, rendering, or publication piecemeal around that call. The transaction owns the lock and checkpoint sequence. Unresolved metadata is deferred; only a completely verified package can contribute external evidence.
+The scheduled editor performs metadata search with `--scheduled-outcome-date "$DATE"` and, when justified, prepares and read-only-validates one automatic package before calling the transaction. Mechanical package errors may be repaired against the same immutable inputs before the wrapper starts. That option replaces an ignored `data/automatic/external-search-outcomes/$DATE.json` handoff. A successful handoff binds the exact immutable batch ID and SHA-256; an arXiv or Crossref timeout records a batch-free deferred outcome. The wrapper consumes the handoff instead of issuing a second metadata search. A deferred timeout continues local processing and returns `no_update` when nothing else changed; malformed outcomes and non-timeout search failures remain fail-closed. Do not call synchronization, analysis, rendering, or publication piecemeal around that call. The transaction owns the lock and checkpoint sequence. Unresolved metadata is deferred; only a completely verified package can contribute external evidence.
 
 The command emits one JSON result:
 

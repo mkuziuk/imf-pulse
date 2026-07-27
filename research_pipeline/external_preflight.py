@@ -263,3 +263,25 @@ def load_scheduled_search_outcome(
             expected_as_of=outcome["as_of"],
         )
     return outcome
+
+
+def load_ready_scheduled_search_batch(
+    project_root: Path, relative_path: str, *, run_date: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load a ready scheduled outcome together with its exact immutable batch."""
+
+    outcome = load_scheduled_search_outcome(
+        project_root, relative_path, run_date=run_date
+    )
+    if outcome["status"] != "ready":
+        raise ExternalPreflightError(
+            "automatic package validation requires a ready metadata outcome"
+        )
+    batch = _validated_batch(
+        project_root,
+        outcome["batch_path"],
+        expected_id=outcome["batch_id"],
+        expected_sha256=outcome["batch_sha256"],
+        expected_as_of=outcome["as_of"],
+    )
+    return outcome, batch

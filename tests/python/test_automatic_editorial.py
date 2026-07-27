@@ -10,7 +10,10 @@ import pytest
 from pypdf import PdfWriter
 
 import research_pipeline.automatic as automatic_module
-from research_pipeline.automatic import load_and_materialize_automatic_package
+from research_pipeline.automatic import (
+    load_and_materialize_automatic_package,
+    validate_automatic_package,
+)
 from research_pipeline.errors import PublicationError, ValidationError
 
 
@@ -269,6 +272,43 @@ def test_automatic_package_rejects_candidate_hash_mismatch_without_writes(
         load_and_materialize_automatic_package(
             root, DATE, batch_id=BATCH_ID, candidates=[tampered]
         )
+    assert not (root / "knowledge" / "curated" / "sources.jsonl").exists()
+    assert not (root / "public" / "artifacts").exists()
+
+
+def test_automatic_package_preflight_is_read_only(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _, candidate = _package(root)
+
+    validation = validate_automatic_package(
+        root, DATE, batch_id=BATCH_ID, candidates=[candidate]
+    )
+
+    assert validation is not None
+    assert validation.source["id"] == SOURCE_ID
+    assert validation.pulse_ids == ("claim-automatic-test",)
+    assert not (root / "knowledge" / "curated" / "sources.jsonl").exists()
+    assert not (root / "public" / "artifacts").exists()
+    assert not (root / "data" / "automatic" / "extracts").exists()
+
+
+def test_automatic_package_preflight_explains_exact_author_mismatch(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    package["source"]["authors"] = ["Ada Lovelace"]
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+
+    with pytest.raises(
+        PublicationError,
+        match="source authors do not exactly match.*copy the candidate authors verbatim",
+    ):
+        validate_automatic_package(
+            root, DATE, batch_id=BATCH_ID, candidates=[candidate]
+        )
+
     assert not (root / "knowledge" / "curated" / "sources.jsonl").exists()
     assert not (root / "public" / "artifacts").exists()
 

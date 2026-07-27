@@ -81,6 +81,17 @@ class AutomaticArtifactPayload:
     manifest_payload: bytes
 
 
+@dataclass(frozen=True)
+class AutomaticPackageValidation:
+    """Read-only validation result used before the publication transaction."""
+
+    package: Mapping[str, Any]
+    source: Mapping[str, Any]
+    units: tuple[Mapping[str, Any], ...]
+    artifact_payloads: tuple[AutomaticArtifactPayload, ...]
+    pulse_ids: tuple[str, ...]
+
+
 @dataclass
 class AutomaticMaterialization:
     package: Mapping[str, Any]
@@ -371,16 +382,31 @@ def _validate_package_semantics(
             is reviewed_rights.get("public_distribution")
         )
     )
+    if source.get("title") != candidate.get("title"):
+        raise PublicationError(
+            "automatic source title does not exactly match the arXiv candidate"
+        )
+    if source.get("authors") != candidate.get("authors"):
+        raise PublicationError(
+            "automatic source authors do not exactly match the arXiv candidate; "
+            "copy the candidate authors verbatim"
+        )
+    if source.get("url") != candidate.get("canonical_url"):
+        raise PublicationError(
+            "automatic source URL does not exactly match the arXiv candidate"
+        )
     if (
-        source.get("title") != candidate.get("title")
-        or source.get("authors") != candidate.get("authors")
-        or source.get("url") != candidate.get("canonical_url")
-        or source.get("source_type") != "preprint"
+        source.get("source_type") != "preprint"
         or source.get("authority_level") != "preprint_unreviewed"
         or source.get("publication_status") != "preprint"
-        or not rights_match
     ):
-        raise PublicationError("automatic source metadata does not match the exact arXiv candidate")
+        raise PublicationError(
+            "automatic source classification is not the permitted preprint form"
+        )
+    if not rights_match:
+        raise PublicationError(
+            "automatic source rights do not match the reviewed rights boundary"
+        )
     source_sha = source.get("content_sha256")
     if not isinstance(source_sha, str) or not SHA256_RE.fullmatch(source_sha):
         raise PublicationError("automatic source content hash is invalid")
@@ -787,14 +813,16 @@ def _package_was_consumed(
     )
 
 
-def load_and_materialize_automatic_package(
+def validate_automatic_package(
     project_root: Path,
     run_date: str,
     *,
     batch_id: str | None,
     candidates: Sequence[Mapping[str, Any]],
     checkpoint: Mapping[str, Any] | None = None,
-) -> AutomaticMaterialization | None:
+) -> AutomaticPackageValidation | None:
+    """Validate today's private package without writing accepted or public files."""
+
     # A package is single-use input. Once its dated pulse is present in both
     # accepted-history views, a same-day rerun must not revalidate or
     # rematerialize leftover private staging against a newer code/schema
@@ -830,14 +858,44 @@ def load_and_materialize_automatic_package(
     artifact_payloads = _artifact_payloads(
         project_root, run_date, package["artifacts"], source, len(units)
     )
+    return AutomaticPackageValidation(
+        package=package,
+        source=source,
+        units=tuple(units),
+        artifact_payloads=artifact_payloads,
+        pulse_ids=pulse_ids,
+    )
+
+
+def load_and_materialize_automatic_package(
+    project_root: Path,
+    run_date: str,
+    *,
+    batch_id: str | None,
+    candidates: Sequence[Mapping[str, Any]],
+    checkpoint: Mapping[str, Any] | None = None,
+) -> AutomaticMaterialization | None:
+    validation = validate_automatic_package(
+        project_root,
+        run_date,
+        batch_id=batch_id,
+        candidates=candidates,
+        checkpoint=checkpoint,
+    )
+    if validation is None:
+        return None
+    package = validation.package
+    source = validation.source
+    units = validation.units
+    artifact_payloads = validation.artifact_payloads
     materialization = AutomaticMaterialization(
         package=package,
         artifact_ids=tuple(payload.artifact_id for payload in artifact_payloads),
         artifact_manifest_urls=tuple(
             payload.manifest_url for payload in artifact_payloads
         ),
-        source_id=source["id"],
-        knowledge_ids=pulse_ids,
+        source_id=str(source["id"]),
+        knowledge_ids=validation.pulse_ids,
     )
     try:
         _append_records(
