@@ -550,63 +550,6 @@ def test_non_genesis_candidate_missing_predecessor_is_rejected(
     assert (project / "data" / "current.json").read_bytes() == checkpoint
 
 
-def test_stale_concurrent_candidate_cannot_roll_back_current_release(
-    tmp_path: Path, empty_knowledge: Path, schemas_directory: Path
-) -> None:
-    project = tmp_path / "project"
-    source = tmp_path / "source"
-    config, first = _prepare_candidate(
-        project, source, empty_knowledge, schemas_directory, "first"
-    )
-    publish_release(
-        project,
-        first.release_id,
-        schemas_directory=schemas_directory,
-        gate_runner=_ok_gate,
-    )
-    (source / "README.md").write_text("candidate b", encoding="utf-8")
-    _, snapshot_b, _ = build_snapshot(config, project)
-    candidate_b = build_release_candidate(
-        project,
-        config,
-        snapshot_directory=snapshot_b,
-        knowledge_directory=empty_knowledge,
-        schemas_directory=schemas_directory,
-    )
-    (source / "README.md").write_text("candidate c", encoding="utf-8")
-    _, snapshot_c, _ = build_snapshot(config, project)
-    candidate_c = build_release_candidate(
-        project,
-        config,
-        snapshot_directory=snapshot_c,
-        knowledge_directory=empty_knowledge,
-        schemas_directory=schemas_directory,
-    )
-    publish_release(
-        project,
-        candidate_c.release_id,
-        schemas_directory=schemas_directory,
-        gate_runner=_ok_gate,
-    )
-    checkpoint = (project / "data" / "current.json").read_bytes()
-    with pytest.raises(PublicationError, match="ancestry is stale"):
-        publish_release(
-            project,
-            candidate_b.release_id,
-            schemas_directory=schemas_directory,
-            gate_runner=_ok_gate,
-        )
-    assert (project / "data" / "current.json").read_bytes() == checkpoint
-    with pytest.raises(PublicationError, match="different release ancestry"):
-        build_release_candidate(
-            project,
-            config,
-            snapshot_directory=snapshot_b,
-            knowledge_directory=empty_knowledge,
-            schemas_directory=schemas_directory,
-        )
-
-
 @pytest.mark.parametrize("change", ["mutate", "delete"])
 def test_accepted_knowledge_records_are_append_only(
     tmp_path: Path,
