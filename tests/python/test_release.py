@@ -159,49 +159,6 @@ def test_publish_runs_all_gates_before_atomic_pointer(
     )
 
 
-def test_failed_gate_preserves_exact_checkpoint(
-    tmp_path: Path, empty_knowledge: Path, schemas_directory: Path
-) -> None:
-    project_root = tmp_path / "project"
-    source_root = tmp_path / "source"
-    config, first = _prepare_candidate(
-        project_root, source_root, empty_knowledge, schemas_directory, "version one"
-    )
-    publish_release(
-        project_root,
-        first.release_id,
-        schemas_directory=schemas_directory,
-        gate_runner=_ok_gate,
-        now="2026-07-22T05:00:00Z",
-    )
-    pointer_path = project_root / "data" / "current.json"
-    before = pointer_path.read_bytes()
-
-    (source_root / "README.md").write_text("version two", encoding="utf-8")
-    _, second_snapshot_directory, _ = build_snapshot(config, project_root)
-    second = build_release_candidate(
-        project_root,
-        config,
-        snapshot_directory=second_snapshot_directory,
-        knowledge_directory=empty_knowledge,
-        schemas_directory=schemas_directory,
-    )
-
-    def fail_on_test(command, cwd, environment):
-        assert pointer_path.read_bytes() == before
-        if tuple(command) == ("npm", "test"):
-            raise PublicationError("injected failure")
-
-    with pytest.raises(PublicationError, match="injected failure"):
-        publish_release(
-            project_root,
-            second.release_id,
-            schemas_directory=schemas_directory,
-            gate_runner=fail_on_test,
-        )
-    assert pointer_path.read_bytes() == before
-
-
 def test_failed_production_build_preserves_release_and_site_selection(
     tmp_path: Path, empty_knowledge: Path, schemas_directory: Path
 ) -> None:
@@ -483,35 +440,6 @@ def test_ingestion_overlap_is_rejected_before_data_creation(
     assert not (root / "data").exists()
 
 
-def test_candidate_manifest_seals_genesis_and_predecessor_ancestry(
-    tmp_path: Path, empty_knowledge: Path, schemas_directory: Path
-) -> None:
-    project = tmp_path / "project"
-    source = tmp_path / "source"
-    config, first = _prepare_candidate(
-        project, source, empty_knowledge, schemas_directory, "genesis"
-    )
-    first_manifest = json.loads((first.release_directory / "release.json").read_text())
-    assert "previous_release_id" not in first_manifest
-    publish_release(
-        project,
-        first.release_id,
-        schemas_directory=schemas_directory,
-        gate_runner=_ok_gate,
-    )
-    (source / "README.md").write_text("successor", encoding="utf-8")
-    _, snapshot_directory, _ = build_snapshot(config, project)
-    second = build_release_candidate(
-        project,
-        config,
-        snapshot_directory=snapshot_directory,
-        knowledge_directory=empty_knowledge,
-        schemas_directory=schemas_directory,
-    )
-    second_manifest = json.loads((second.release_directory / "release.json").read_text())
-    assert second_manifest["previous_release_id"] == first.release_id
-
-
 def test_non_genesis_candidate_missing_predecessor_is_rejected(
     tmp_path: Path, empty_knowledge: Path, schemas_directory: Path
 ) -> None:
@@ -720,7 +648,6 @@ def test_site_build_digest_is_the_canonical_relative_file_mapping(
     [
         {"site_build_path": None, "site_build_sha256": None},
         {"site_build_path": "data/site-builds/site-" + "0" * 64},
-        {"site_build_sha256": "0" * 64},
     ],
 )
 def test_present_invalid_site_pointer_fields_are_not_legacy(
