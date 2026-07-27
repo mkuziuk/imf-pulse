@@ -56,7 +56,7 @@ jobs:
 
       - name: Run pipeline tests
         if: steps.verification.outputs.scope == 'full'
-        run: python -m pytest -q
+        run: python -m pytest -q -n 2
 
       - name: Confirm the content-only fast path
         if: steps.verification.outputs.scope == 'content'
