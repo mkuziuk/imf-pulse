@@ -23,6 +23,9 @@ CANDIDATE_ID = "candidate-arxiv-11111111111111111111"
 CANDIDATE_SHA = "2" * 64
 BATCH_ID = "external-batch-33333333333333333333"
 SOURCE_ID = "src-external-arxiv-2607-12345v1"
+SECOND_CANDIDATE_ID = "candidate-arxiv-22222222222222222222"
+SECOND_CANDIDATE_SHA = "5" * 64
+SECOND_SOURCE_ID = "src-external-arxiv-2607-54321v1"
 
 
 def _project(tmp_path: Path) -> Path:
@@ -65,43 +68,48 @@ def _package(root: Path) -> tuple[dict, dict]:
     }
     source_path = "external/arxiv/2607.12345v1.pdf"
     package = {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "date": DATE,
-        "candidate": {
-            "batch_id": BATCH_ID,
-            "candidate_id": CANDIDATE_ID,
-            "candidate_sha256": CANDIDATE_SHA,
-        },
+        "article_mode": "deep_dive",
+        "candidates": [
+            {
+                "batch_id": BATCH_ID,
+                "candidate_id": CANDIDATE_ID,
+                "candidate_sha256": CANDIDATE_SHA,
+            }
+        ],
         "editor": {
             "mode": "automatic_fail_closed",
             "model": "gpt-5.6-sol",
             "reviewed_at": "2026-07-24T05:00:00Z",
             "rationale": "Exact topical primary evidence was inspected and bound to one page-level claim.",
         },
-        "source": {
-            "schema_version": "1.0.0",
-            "id": SOURCE_ID,
-            "title": candidate["title"],
-            "authors": candidate["authors"],
-            "date": "2026-07-20",
-            "source_type": "preprint",
-            "authority_level": "preprint_unreviewed",
-            "publication_status": "preprint",
-            "topics": ["iterative-filtering"],
-            "relative_path": source_path,
-            "url": candidate["canonical_url"],
-            "location": candidate["canonical_url"],
-            "rights": {
-                "license": "unknown",
-                "reuse_status": "internal_only",
-                "public_distribution": False,
+        "sources": [
+            {
+                "schema_version": "1.0.0",
+                "id": SOURCE_ID,
+                "title": candidate["title"],
+                "authors": candidate["authors"],
+                "date": "2026-07-20",
+                "source_type": "preprint",
+                "authority_level": "preprint_unreviewed",
+                "publication_status": "preprint",
+                "topics": ["iterative-filtering"],
+                "relative_path": source_path,
+                "url": candidate["canonical_url"],
+                "location": candidate["canonical_url"],
+                "rights": {
+                    "license": "unknown",
+                    "reuse_status": "internal_only",
+                    "public_distribution": False,
+                },
+                "content_sha256": digest,
+                "limitations": ["Test preprint."],
+                "retrieved_at": "2026-07-24T05:00:00Z",
+                "last_processed_at": "2026-07-24T05:00:00Z",
+                "extractor": "pdf-pages-automatic-v1",
             },
-            "content_sha256": digest,
-            "limitations": ["Test preprint."],
-            "retrieved_at": "2026-07-24T05:00:00Z",
-            "last_processed_at": "2026-07-24T05:00:00Z",
-            "extractor": "pdf-pages-automatic-v1",
-        },
+        ],
         "knowledge": {
             "claims": [
                 {
@@ -154,8 +162,13 @@ def _package(root: Path) -> tuple[dict, dict]:
             ],
             "why_this_matters": "The transaction can validate automatic evidence without weakening provenance.",
             "unresolved_question": "Will an invalid candidate hash remain fail-closed?",
-            "source_label": "Ada Example (2026)",
-            "source_locator": "arXiv test fixture, p. 1",
+            "source_citations": [
+                {
+                    "source_id": SOURCE_ID,
+                    "label": "Ada Example (2026)",
+                    "locator": "arXiv test fixture, p. 1",
+                }
+            ],
         },
         "artifacts": [
             {
@@ -212,6 +225,63 @@ def _package(root: Path) -> tuple[dict, dict]:
     return package, candidate
 
 
+def _synthesis_package(root: Path) -> tuple[dict, list[dict]]:
+    package, first_candidate = _package(root)
+    second_candidate = {
+        **first_candidate,
+        "id": SECOND_CANDIDATE_ID,
+        "candidate_sha256": SECOND_CANDIDATE_SHA,
+        "title": "A complementary robust local estimator",
+        "canonical_url": "https://arxiv.org/abs/2607.54321v1",
+    }
+    second_source = copy.deepcopy(package["sources"][0])
+    second_source.update(
+        {
+            "id": SECOND_SOURCE_ID,
+            "title": second_candidate["title"],
+            "url": second_candidate["canonical_url"],
+            "location": second_candidate["canonical_url"],
+            "relative_path": "external/arxiv/2607.54321v1.pdf",
+        }
+    )
+    package["article_mode"] = "synthesis"
+    package["candidates"].append(
+        {
+            "batch_id": BATCH_ID,
+            "candidate_id": SECOND_CANDIDATE_ID,
+            "candidate_sha256": SECOND_CANDIDATE_SHA,
+        }
+    )
+    package["sources"].append(second_source)
+    package["knowledge"]["claims"][0]["evidence"].append(
+        {
+            "source_id": SECOND_SOURCE_ID,
+            "source_sha256": second_source["content_sha256"],
+            "role": "supporting",
+            "locator": {
+                "kind": "pdf",
+                "path": second_source["relative_path"],
+                "page": 2,
+            },
+        }
+    )
+    package["pulse"]["source_citations"] = [
+        {
+            "source_id": SOURCE_ID,
+            "label": "Ada Example (2026), filtering",
+            "locator": "arXiv 2607.12345v1, p. 1",
+        },
+        {
+            "source_id": SECOND_SOURCE_ID,
+            "label": "Ada Example (2026), local estimation",
+            "locator": "arXiv 2607.54321v1, p. 2",
+        },
+    ]
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+    return package, [first_candidate, second_candidate]
+
+
 def test_automatic_package_materializes_append_only_records_and_rolls_back(
     tmp_path: Path,
 ) -> None:
@@ -221,7 +291,7 @@ def test_automatic_package_materializes_append_only_records_and_rolls_back(
         root, DATE, batch_id=BATCH_ID, candidates=[candidate]
     )
     assert outcome is not None
-    assert outcome.source_id == SOURCE_ID
+    assert outcome.source_ids == (SOURCE_ID,)
     assert outcome.knowledge_ids == ("claim-automatic-test",)
     assert outcome.artifact_ids == (
         "automatic-automatic-test-2026-07-24",
@@ -258,7 +328,78 @@ def test_automatic_package_materializes_append_only_records_and_rolls_back(
         / "manifest.json"
     ).exists()
     assert not (root / "data" / "automatic" / "extracts" / f"{SOURCE_ID}.jsonl").exists()
-    assert package["source"]["content_sha256"]
+    assert package["sources"][0]["content_sha256"]
+
+
+def test_multi_source_synthesis_binds_and_materializes_every_primary_pdf(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    _, candidates = _synthesis_package(root)
+
+    outcome = load_and_materialize_automatic_package(
+        root, DATE, batch_id=BATCH_ID, candidates=candidates
+    )
+
+    assert outcome is not None
+    assert outcome.source_ids == (SOURCE_ID, SECOND_SOURCE_ID)
+    assert (
+        root
+        / "data"
+        / "automatic"
+        / "extracts"
+        / f"{SECOND_SOURCE_ID}.jsonl"
+    ).is_file()
+    stored_sources = [
+        json.loads(line)
+        for line in (
+            root / "knowledge" / "curated" / "sources.jsonl"
+        ).read_text(encoding="utf-8").splitlines()
+    ]
+    assert [source["id"] for source in stored_sources] == [
+        SOURCE_ID,
+        SECOND_SOURCE_ID,
+    ]
+    proposal_fingerprint = "a" * 64
+    proposal = outcome.proposal(
+        run_date=DATE,
+        pulse_index=1,
+        release_id="release-synthesis-test",
+        analysis={
+            "id": "analysis-synthesis-test",
+            "analysis_fingerprint": "b" * 64,
+            "selected_candidate_fingerprints": [proposal_fingerprint],
+            "ranked_candidates": [
+                {
+                    "proposal_fingerprint": proposal_fingerprint,
+                    "object_id": "claim-automatic-test",
+                }
+            ],
+        },
+        schema_path=root / "schemas" / "pulse-proposal.schema.json",
+    )
+    assert proposal["source_ids"] == [SOURCE_ID, SECOND_SOURCE_ID]
+    assert len(proposal["sources"]) == 2
+    assert len(proposal["signals"][0]["evidence"]) == 2
+
+
+def test_multi_source_synthesis_rejects_an_unused_selected_source(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path)
+    package, candidates = _synthesis_package(root)
+    package["knowledge"]["claims"][0]["evidence"] = package["knowledge"]["claims"][0][
+        "evidence"
+    ][:1]
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+
+    with pytest.raises(
+        PublicationError, match="knowledge evidence must use every selected source"
+    ):
+        validate_automatic_package(
+            root, DATE, batch_id=BATCH_ID, candidates=candidates
+        )
 
 
 def test_automatic_package_rejects_candidate_hash_mismatch_without_writes(
@@ -276,6 +417,19 @@ def test_automatic_package_rejects_candidate_hash_mismatch_without_writes(
     assert not (root / "public" / "artifacts").exists()
 
 
+def test_automatic_package_rejects_removed_v1_contract(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    package["schema_version"] = "1.0.0"
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="automatic editorial package"):
+        validate_automatic_package(
+            root, DATE, batch_id=BATCH_ID, candidates=[candidate]
+        )
+
+
 def test_automatic_package_preflight_is_read_only(tmp_path: Path) -> None:
     root = _project(tmp_path)
     _, candidate = _package(root)
@@ -285,7 +439,7 @@ def test_automatic_package_preflight_is_read_only(tmp_path: Path) -> None:
     )
 
     assert validation is not None
-    assert validation.source["id"] == SOURCE_ID
+    assert validation.sources[0]["id"] == SOURCE_ID
     assert validation.pulse_ids == ("claim-automatic-test",)
     assert not (root / "knowledge" / "curated" / "sources.jsonl").exists()
     assert not (root / "public" / "artifacts").exists()
@@ -297,7 +451,7 @@ def test_automatic_package_preflight_explains_exact_author_mismatch(
 ) -> None:
     root = _project(tmp_path)
     package, candidate = _package(root)
-    package["source"]["authors"] = ["Ada Lovelace"]
+    package["sources"][0]["authors"] = ["Ada Lovelace"]
     package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
     package_path.write_text(json.dumps(package), encoding="utf-8")
 
@@ -321,7 +475,7 @@ def test_automatic_package_rejects_source_version_in_accepted_release(
     release_path = "data/releases/release-11111111111111111111"
     sources = root / release_path / "sources.jsonl"
     sources.parent.mkdir(parents=True)
-    sources.write_text(json.dumps(package["source"]) + "\n", encoding="utf-8")
+    sources.write_text(json.dumps(package["sources"][0]) + "\n", encoding="utf-8")
 
     with pytest.raises(PublicationError, match="source version is already accepted"):
         load_and_materialize_automatic_package(
@@ -380,7 +534,7 @@ def test_consumed_automatic_package_is_ignored_before_schema_validation(
     assert not (root / "data" / "automatic" / "extracts").exists()
 
 
-def test_unconsumed_legacy_package_remains_fail_closed(tmp_path: Path) -> None:
+def test_unconsumed_malformed_package_remains_fail_closed(tmp_path: Path) -> None:
     root = _project(tmp_path)
     package, candidate = _package(root)
     package["diagram"] = package.pop("artifacts")[0]
@@ -413,7 +567,7 @@ def test_automatic_package_rejects_source_figure_without_reviewed_reuse_rights(
             "kind": "source_figure",
             "caption": "A source figure test fixture.",
             "source_id": SOURCE_ID,
-            "source_sha256": package["source"]["content_sha256"],
+            "source_sha256": package["sources"][0]["content_sha256"],
             "locator": {
                 "kind": "pdf",
                 "path": "external/arxiv/2607.12345v1.pdf",
@@ -452,14 +606,14 @@ def test_automatic_package_accepts_exact_rights_cleared_source_figure(
         "reuse_status": "cleared",
         "public_distribution": True,
     }
-    package["source"]["rights"] = reviewed_rights
+    package["sources"][0]["rights"] = reviewed_rights
     figure = package["artifacts"][1]
     figure.update(
         {
             "kind": "source_figure",
             "caption": "A rights-cleared source figure test fixture.",
             "source_id": SOURCE_ID,
-            "source_sha256": package["source"]["content_sha256"],
+            "source_sha256": package["sources"][0]["content_sha256"],
             "locator": {
                 "kind": "pdf",
                 "path": "external/arxiv/2607.12345v1.pdf",
@@ -514,14 +668,14 @@ def test_automatic_package_rejects_source_figure_rights_that_do_not_match_review
         "reuse_status": "cleared",
         "public_distribution": True,
     }
-    package["source"]["rights"] = reviewed_rights
+    package["sources"][0]["rights"] = reviewed_rights
     figure = package["artifacts"][1]
     figure.update(
         {
             "kind": "source_figure",
             "caption": "A source figure with mismatched rights.",
             "source_id": SOURCE_ID,
-            "source_sha256": package["source"]["content_sha256"],
+            "source_sha256": package["sources"][0]["content_sha256"],
             "locator": {
                 "kind": "pdf",
                 "path": "external/arxiv/2607.12345v1.pdf",

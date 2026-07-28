@@ -36,6 +36,7 @@ data/.daily-pipeline.lock
 data/external/
 data/review/
 data/automatic/
+data/automatic/scouting/
 .public-release-staging-*/
 
 .DS_Store

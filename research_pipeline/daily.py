@@ -323,7 +323,7 @@ def _default_load_context(project_root: Path, mode: str, run_date: str) -> Daily
         "enabled": True,
         "mode": "automatic_fail_closed",
         "model": "gpt-5.6-sol",
-        "maximum_sources_per_pulse": 1,
+        "maximum_sources_per_pulse": 3,
         "allowed_primary_evidence_hosts": ["arxiv.org"],
         "require_primary_pdf": True,
         "require_page_locators": True,

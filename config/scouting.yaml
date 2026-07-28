@@ -1,0 +1,33 @@
+version: 1
+
+timezone: Europe/Moscow
+model: gpt-5.6-luna
+reasoning_effort: high
+max_cards_per_run: 12
+max_candidates_per_edition: 40
+
+# Each reviewed provider query runs once per scouting day. Splitting the six
+# existing queries across four slots reduces burst traffic without expanding
+# the network allowlist or changing the underlying discovery policy.
+slots:
+  morning:
+    local_time: "09:00"
+    query_ids: [arxiv-iterative-filtering]
+  midday:
+    local_time: "13:00"
+    query_ids: [arxiv-robust-local-estimation]
+  afternoon:
+    local_time: "17:00"
+    query_ids:
+      - crossref-filtering-papers
+      - crossref-robust-estimation-papers
+  evening:
+    local_time: "21:00"
+    query_ids:
+      - crossref-contamination-and-decomposition-papers
+      - crossref-books-and-chapters
+
+paths:
+  submission_root: data/automatic/scouting/submissions
+  inbox_root: data/automatic/scouting/inboxes
+  draft_root: tmp/luna-scout

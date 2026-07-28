@@ -12,6 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from research_pipeline.external import (
+    ExternalMetadataRateLimited,
     ExternalMetadataTimeout,
     ExternalMonitoringError,
     run_external_search,
@@ -35,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
             "must match the 06:00 Europe/Moscow cutoff"
         ),
     )
+    parser.add_argument(
+        "--query-id",
+        action="append",
+        dest="query_ids",
+        help="Run only this reviewed query id; repeat for a bounded shard",
+    )
     return parser
 
 
@@ -43,8 +50,13 @@ def main(argv: list[str] | None = None) -> int:
     project_root = args.project_root.resolve()
     config = args.config or project_root / "config" / "external-sources.yaml"
     try:
-        result = run_external_search(config, project_root, args.as_of)
-    except ExternalMetadataTimeout as exc:
+        result = run_external_search(
+            config,
+            project_root,
+            args.as_of,
+            query_ids=args.query_ids,
+        )
+    except (ExternalMetadataTimeout, ExternalMetadataRateLimited) as exc:
         if args.scheduled_outcome_date:
             try:
                 outcome_path = write_scheduled_search_outcome(

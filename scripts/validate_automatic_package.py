@@ -50,8 +50,13 @@ def main(argv: list[str] | None = None) -> int:
             payload = {
                 "status": "valid",
                 "date": args.date,
-                "candidate_id": validation.package["candidate"]["candidate_id"],
-                "source_id": validation.source["id"],
+                "candidate_ids": [
+                    binding["candidate_id"]
+                    for binding in validation.package["candidates"]
+                ],
+                "source_ids": [
+                    source["id"] for source in validation.sources
+                ],
                 "knowledge_ids": list(validation.pulse_ids),
                 "artifact_ids": [
                     artifact.artifact_id

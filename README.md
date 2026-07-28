@@ -12,7 +12,7 @@ The MVP implements all five planned phases without introducing a crawler, applic
 - bounded arXiv and Crossref monitoring for preprints, journal papers, proceedings, books, and chapters, with immutable receipts and exact-hash review decisions;
 - one transactional daily command plus a guarded local publisher scheduled for 06:00 `Europe/Moscow`.
 
-The system is deliberately conservative. A new source or changed hash is not automatically news. Primary external literature has editorial priority; local IMF changes provide supporting, reproducing, or contradicting context. Unresolved metadata is deferred rather than blocking a run. The scheduled editor may inspect at most one exact arXiv paper through the guarded PDF helper, but publication proceeds only when the candidate hash, PDF hash, page locators, append-only knowledge records, novelty selection, prose, artifact, and every release gate agree. Crossref-only records and uncertain evidence are skipped.
+The system is deliberately conservative. A new source or changed hash is not automatically news. Primary external literature has editorial priority; local IMF changes provide supporting, reproducing, or contradicting context. Unresolved metadata is deferred rather than blocking a run. A private Luna scout ranks hash-bound metadata during the day but supplies neither evidence nor publication authority. The scheduled Sol editor may inspect one exact arXiv paper for a deep dive, or two to three for a coherent synthesis, through the guarded PDF helper. Publication proceeds only when every candidate hash, PDF hash, page locator, append-only knowledge record, novelty selection, source citation, artifact, and release gate agree. Crossref-only records and uncertain evidence are skipped.
 
 ## Research and publication guarantees
 
@@ -100,7 +100,7 @@ Phase 4 is a bounded literature metadata monitor configured in `config/external-
 
 Candidate ordering follows the editorial contract in `config/pulse.yaml`: published papers, books, chapters, preprints, then local research context. Accepted source versions are filtered twice, while `scripts/build_editorial_context.py` gives the editor sealed publication history for semantic comparison. Crossref results must contain an exact configured topic phrase in title, venue, subject, or abstract metadata; fuzzy API ranking alone cannot admit a candidate. OpenAlex and Unpaywall are not enabled because their current APIs require user-specific keys or contact details. They can be added later through reviewed local configuration without embedding credentials.
 
-Metadata discoveries do not block the daily transaction. Unresolved exact records remain available in later batches, and the deterministic comparison helper still distinguishes definition drift, different targets, exact-scope contradictions, and review gaps without semantic guessing. Manual `approved` and `rejected` decisions remain available for curation, but the unattended path uses a separate ignored, schema-validated editorial package bound to one exact arXiv candidate and one safely fetched primary PDF. Metadata alone never becomes evidence.
+Metadata discoveries do not block the daily transaction. Unresolved exact records remain available in later batches, and the deterministic comparison helper still distinguishes definition drift, different targets, exact-scope contradictions, and review gaps without semantic guessing. Manual `approved` and `rejected` decisions remain available for curation, but the unattended path uses a separate ignored, schema-validated editorial package bound to one to three exact arXiv candidates and matching safely fetched primary PDFs. Metadata and Luna rankings alone never become evidence.
 
 See [docs/operations.md](docs/operations.md) for the exact search, review, and comparison commands.
 
@@ -126,7 +126,7 @@ It emits one compact JSON object:
 | `blocked` | A required reviewed configuration, executable, source root, or permission is unavailable. |
 | `failed` | A processing or validation gate failed; the accepted checkpoint is preserved. |
 
-The daily research command itself never runs Git. The independent 06:00 `Europe/Moscow` Codex task calls the guarded wrapper instead:
+The daily research command itself never runs Git. The independent OpenClaw Sol editor runs at 06:00 `Europe/Moscow` and calls the guarded wrapper instead:
 
 ```bash
 .venv/bin/python scripts/run_scheduled_pipeline.py \

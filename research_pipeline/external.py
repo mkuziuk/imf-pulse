@@ -60,6 +60,14 @@ class ExternalMetadataTimeout(ExternalMonitoringError):
     """A provider did not return metadata within the reviewed time limit."""
 
 
+class ExternalMetadataRateLimited(ExternalMonitoringError):
+    """A provider asked the bounded monitor to retry later."""
+
+    def __init__(self, message: str, *, retry_after_seconds: int | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
 ATOM = "http://www.w3.org/2005/Atom"
 ARXIV = "http://arxiv.org/schemas/atom"
 IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
@@ -591,6 +599,29 @@ def fetch_metadata(
         raise
     except TimeoutError as exc:
         raise ExternalMetadataTimeout(f"metadata request timed out: {exc}") from exc
+    except urllib.error.HTTPError as exc:
+        if exc.code == 429:
+            retry_after: int | None = None
+            raw_retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            if raw_retry_after is not None:
+                try:
+                    parsed_retry_after = int(raw_retry_after)
+                except ValueError:
+                    parsed_retry_after = 0
+                if 1 <= parsed_retry_after <= 86_400:
+                    retry_after = parsed_retry_after
+            suffix = (
+                f"; retry after {retry_after} seconds"
+                if retry_after is not None
+                else ""
+            )
+            raise ExternalMetadataRateLimited(
+                f"metadata provider rate limited the request{suffix}",
+                retry_after_seconds=retry_after,
+            ) from exc
+        raise ExternalMonitoringError(
+            f"metadata request failed with HTTP {exc.code}"
+        ) from exc
     except urllib.error.URLError as exc:
         if isinstance(exc.reason, TimeoutError):
             raise ExternalMetadataTimeout(f"metadata request timed out: {exc.reason}") from exc
@@ -1418,12 +1449,37 @@ def run_external_search(
     project_root: Path,
     as_of: str,
     *,
+    query_ids: Sequence[str] | None = None,
     fetcher: Fetcher | None = None,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
-    """Run all fixed queries and write one immutable metadata candidate batch."""
+    """Run a reviewed query subset and write one immutable metadata candidate batch."""
 
     config = load_external_config(config_path)
+    configured_queries = list(config["queries"])
+    if query_ids is None:
+        selected_queries = configured_queries
+    else:
+        requested = list(query_ids)
+        if (
+            not requested
+            or len(requested) != len(set(requested))
+            or any(not isinstance(item, str) for item in requested)
+        ):
+            raise ExternalMonitoringError(
+                "query_ids must be a non-empty unique string list"
+            )
+        by_id = {query["id"]: query for query in configured_queries}
+        unknown = sorted(set(requested) - set(by_id))
+        if unknown:
+            raise ExternalMonitoringError(
+                f"query_ids contains unknown reviewed queries: {unknown}"
+            )
+        selected_queries = [
+            by_id[query["id"]]
+            for query in configured_queries
+            if query["id"] in requested
+        ]
     cutoff = parse_as_of(as_of)
     project_root = project_root.resolve(strict=True)
     if not project_root.is_dir():
@@ -1431,7 +1487,7 @@ def run_external_search(
     policy = config["policy"]
     fetch = fetcher or fetch_metadata
     fetched: list[tuple[dict[str, Any], str, FetchedMetadata, str]] = []
-    for index, query in enumerate(config["queries"]):
+    for index, query in enumerate(selected_queries):
         if index:
             sleeper(policy["minimum_request_interval_seconds"])
         request_url = build_metadata_request(config, query, cutoff)

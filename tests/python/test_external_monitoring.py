@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import json
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import jsonschema
@@ -9,6 +11,7 @@ import pytest
 import yaml
 
 from research_pipeline.external import (
+    ExternalMetadataRateLimited,
     ExternalMonitoringError,
     FetchedMetadata,
     build_arxiv_request,
@@ -227,6 +230,73 @@ def test_search_writes_private_receipt_public_safe_batch_and_deduplicates(
     assert second["already_seen_count"] == 1
     third, _ = run_search(tmp_path, atom_feed())
     assert third == second
+
+
+def test_search_can_run_one_reviewed_query_shard(tmp_path: Path) -> None:
+    urls: list[str] = []
+
+    def fetcher(url: str, **_: object) -> bytes:
+        urls.append(url)
+        return atom_feed()
+
+    result = run_external_search(
+        CONFIG,
+        tmp_path,
+        "2026-07-23T08:00:00+03:00",
+        query_ids=["arxiv-iterative-filtering"],
+        fetcher=fetcher,
+        sleeper=lambda _: None,
+    )
+
+    assert result["status"] == "candidates_pending_review"
+    assert len(urls) == 1
+    batch = json.loads((tmp_path / result["batch_path"]).read_text())
+    assert [query["id"] for query in batch["queries"]] == [
+        "arxiv-iterative-filtering"
+    ]
+
+
+def test_search_rejects_unknown_query_shard(tmp_path: Path) -> None:
+    with pytest.raises(ExternalMonitoringError, match="unknown reviewed queries"):
+        run_external_search(
+            CONFIG,
+            tmp_path,
+            "2026-07-23T08:00:00+03:00",
+            query_ids=["not-reviewed"],
+            fetcher=lambda *_args, **_kwargs: atom_feed(),
+        )
+
+
+def test_metadata_fetch_classifies_http_429_as_retryable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from research_pipeline.external import fetch_metadata
+
+    error = urllib.error.HTTPError(
+        "https://export.arxiv.org/api/query?search_query=test",
+        429,
+        "Too Many Requests",
+        {"Retry-After": "120"},
+        None,
+    )
+
+    class Opener:
+        def open(self, *_args: object, **_kwargs: object) -> object:
+            raise error
+
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *_args: Opener())
+
+    with pytest.raises(ExternalMetadataRateLimited) as captured:
+        fetch_metadata(
+            "https://export.arxiv.org/api/query?search_query=test",
+            timeout_seconds=5,
+            max_bytes=1024,
+            allowed_hosts=["export.arxiv.org"],
+            media_types=["application/atom+xml"],
+            user_agent="test",
+        )
+
+    assert captured.value.retry_after_seconds == 120
 
 
 def test_search_excludes_source_version_already_in_accepted_release(

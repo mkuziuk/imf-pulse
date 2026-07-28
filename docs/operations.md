@@ -136,7 +136,7 @@ Before choosing or fetching a candidate, build the read-only accepted-history co
 
 The command verifies accepted pulse paths and hashes and summarizes their source versions, knowledge, topics, signals, and unresolved questions. Treat it as required context, not publication authority. Compare the candidate batch with this index, then read full bodies only for the prior pulses you judge most similar. Proceed only for a distinct method, result, experiment, contradiction, or open question.
 
-The unattended editor may choose at most one exact arXiv candidate and fetch its official primary PDF into private ignored storage:
+The unattended editor may choose one exact arXiv candidate for a deep dive, or two to three for a coherent synthesis. Fetch each official primary PDF separately into private ignored storage:
 
 ```bash
 .venv/bin/python scripts/fetch_arxiv_evidence.py \
@@ -146,7 +146,7 @@ The unattended editor may choose at most one exact arXiv candidate and fetch its
   --candidate-sha256 CANDIDATE_SHA256
 ```
 
-The helper rejects non-arXiv candidates, redirects, oversized responses, unexpected content types, and non-PDF bytes. Accepted source versions are removed before batch creation and rejected again during package validation. The editor follows `prompts/automatic-editor.md` and writes at most one ignored `data/automatic/packages/YYYY-MM-DD.json` conforming to `schemas/automatic-pulse-package.schema.json`. `research_pipeline/automatic.py` revalidates the exact candidate, accepted-source exclusion, private PDF hash and structure, page extracts, evidence links, append-only knowledge, deterministic novelty fingerprints, pulse text, and every selected explanatory artifact before any accepted file changes. Private generated images and rights-cleared source-figure extracts are staged beneath `tmp/automatic-visuals/` and bound by exact hash. A generated surrogate must also bind the exact source page that informed its brief and declare the `scientific-content-faithful_visual-form-original` policy: scientific semantics may be preserved precisely, but protected pixels, numerical samples, labels, color maps, and figure composition may not be copied. Do not put PDFs or extracted page text in Git or `public-release/`.
+The helper rejects non-arXiv candidates, redirects, oversized responses, unexpected content types, and non-PDF bytes. Accepted source versions are removed before batch creation and rejected again during package validation. The editor follows `prompts/automatic-editor.md` and writes at most one ignored `data/automatic/packages/YYYY-MM-DD.json` conforming to `schemas/automatic-pulse-package.schema.json`. Every package uses schema version 2, binds one to three candidates to the same number of primary sources, and declares `deep_dive` or `synthesis`. `research_pipeline/automatic.py` revalidates every exact candidate, accepted-source exclusion, private PDF hash and structure, page extract, evidence link, source citation, append-only knowledge object, deterministic novelty fingerprint, pulse field, and selected explanatory artifact before any accepted file changes. Private generated images and rights-cleared source-figure extracts are staged beneath `tmp/automatic-visuals/` and bound by exact hash. A generated surrogate must also bind the exact source page that informed its brief and declare the `scientific-content-faithful_visual-form-original` policy: scientific semantics may be preserved precisely, but protected pixels, numerical samples, labels, color maps, and figure composition may not be copied. Do not put PDFs or extracted page text in Git or `public-release/`.
 
 Before the one daily transaction, validate a prepared package without materializing accepted or public files:
 
@@ -198,12 +198,18 @@ An automatic package is single-use staging. Once its dated pulse appears in the 
 
 ### Scheduled task boundary
 
-The Codex desktop scheduled task is configured outside the repository with these fixed properties:
+OpenClaw owns three isolated scheduled jobs:
 
-- schedule: daily at 06:00 `Europe/Moscow`;
+- Luna scouting: 09:00, 13:00, 17:00, and 21:00 `Europe/Moscow`, using GPT-5.6 Luna with high reasoning;
+- Sol inbox freeze: daily at 05:45 `Europe/Moscow`;
+- Sol editorial publication: daily at 06:00 `Europe/Moscow`, using GPT-5.6 Sol with medium reasoning.
+
+The jobs use these fixed boundaries:
+
 - target: `$PROJECT_ROOT`;
-- mode: standalone local run;
-- editorial preparation: search once, read sealed publication context, inspect at most one exact arXiv primary PDF, and create at most one schema-valid automatic package;
+- mode: isolated local agent runs with no public channel binding;
+- Luna scope: reviewed query shards, metadata-only ranking, and private scouting submissions; no PDFs, evidence acceptance, Git, or publication;
+- Sol editorial preparation: use Luna's frozen private ranking only as discovery input, read sealed publication context, inspect one to three exact arXiv primary PDFs, and create at most one schema-valid deep-dive or synthesis package;
 - search handoff: pass `--scheduled-outcome-date "$DATE"`; the wrapper consumes the resulting hash-bound private outcome without repeating provider requests;
 - timeout behavior: a provider read timeout is deferred as `no_update`; validation, identity, rights, and other safety failures still fail closed;
 - transaction command: `.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE"` exactly once;
@@ -211,7 +217,7 @@ The Codex desktop scheduled task is configured outside the repository with these
 - allowed publication action: one non-force commit/push followed by the matching Pages deployment, and only when the daily result is `published` and every wrapper guard passes;
 - forbidden actions: source-repository writes, permission widening, code execution from sources, use of Sci-Hub or untrusted full text, Git activity for any other status, tags, PRs, force-pushes, and hosting-setting changes.
 
-`config/pulse.yaml` records the approved schedule and safety prerequisites but does not install the task. Test the exact scheduled prompt manually in an independent local run before enabling or changing it. Codex desktop availability is required for an app-local scheduled task.
+`config/pulse.yaml` and `config/scouting.yaml` record the approved publication and scouting policies. OpenClaw scheduler declarations remain outside the repository; inspect them with `openclaw cron list --all`.
 
 ## Public export and GitHub Pages
 

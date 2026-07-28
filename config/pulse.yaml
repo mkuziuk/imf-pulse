@@ -108,7 +108,7 @@ external_monitoring:
     enabled: true
     mode: automatic_fail_closed
     model: gpt-5.6-sol
-    maximum_sources_per_pulse: 1
+    maximum_sources_per_pulse: 3
     allowed_primary_evidence_hosts: [arxiv.org]
     require_primary_pdf: true
     require_page_locators: true

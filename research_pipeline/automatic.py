@@ -86,7 +86,7 @@ class AutomaticPackageValidation:
     """Read-only validation result used before the publication transaction."""
 
     package: Mapping[str, Any]
-    source: Mapping[str, Any]
+    sources: tuple[Mapping[str, Any], ...]
     units: tuple[Mapping[str, Any], ...]
     artifact_payloads: tuple[AutomaticArtifactPayload, ...]
     pulse_ids: tuple[str, ...]
@@ -97,7 +97,7 @@ class AutomaticMaterialization:
     package: Mapping[str, Any]
     artifact_ids: tuple[str, ...]
     artifact_manifest_urls: tuple[str, ...]
-    source_id: str
+    source_ids: tuple[str, ...]
     knowledge_ids: tuple[str, ...]
     _backups: dict[Path, bytes | None] = field(default_factory=dict)
     committed: bool = False
@@ -162,25 +162,36 @@ class AutomaticMaterialization:
         for fingerprint, knowledge_id in zip(selected, ordered_ids, strict=True):
             source_signal = by_knowledge[str(knowledge_id)]
             evidence = knowledge_records[str(knowledge_id)]["evidence"]
-            pages = sorted(
-                {
-                    item.get("locator", {}).get("page")
-                    for item in evidence
-                    if isinstance(item, Mapping)
-                    and isinstance(item.get("locator"), Mapping)
-                    and isinstance(item["locator"].get("page"), int)
-                }
-            )
-            page_label = ", ".join(str(page) for page in pages)
+            pages_by_source: dict[str, set[int]] = {}
+            for item in evidence:
+                if not isinstance(item, Mapping):
+                    continue
+                locator = item.get("locator")
+                source_id = item.get("source_id")
+                if (
+                    isinstance(source_id, str)
+                    and isinstance(locator, Mapping)
+                    and isinstance(locator.get("page"), int)
+                ):
+                    pages_by_source.setdefault(source_id, set()).add(locator["page"])
+            evidence_links = [
+                (
+                    f"[Primary paper, p. {', '.join(str(page) for page in sorted(pages))}]"
+                    f"(/sources#{source_id})"
+                )
+                for source_id, pages in sorted(pages_by_source.items())
+            ]
+            if not evidence_links:
+                raise PublicationError(
+                    "automatic knowledge record has no renderable primary evidence"
+                )
             rendered_signals.append(
                 {
                     "heading": source_signal["heading"],
                     "proposal_fingerprint": fingerprint,
                     "what_changed": source_signal["what_changed"],
                     "why_it_matters": source_signal["why_it_matters"],
-                    "evidence": [
-                        f"[Primary paper, p. {page_label}](/sources#{self.source_id})"
-                    ],
+                    "evidence": evidence_links,
                     "confidence": source_signal["confidence"],
                     "assumptions": source_signal["assumptions"],
                     "limitations": source_signal["limitations"],
@@ -203,18 +214,12 @@ class AutomaticMaterialization:
                 "topics": pulse["topics"],
                 "featured_artifact": self.artifact_ids[0],
                 "artifact_manifests": list(self.artifact_manifest_urls),
-                "source_ids": [self.source_id],
+                "source_ids": list(self.source_ids),
                 "knowledge_ids": [str(item) for item in ordered_ids],
                 "signals": rendered_signals,
                 "why_this_matters": pulse["why_this_matters"],
                 "unresolved_question": pulse["unresolved_question"],
-                "sources": [
-                    {
-                        "source_id": self.source_id,
-                        "label": pulse["source_label"],
-                        "locator": pulse["source_locator"],
-                    }
-                ],
+                "sources": list(pulse["source_citations"]),
             }
         )
         validate_proposal(proposal, schema_path)
@@ -233,28 +238,45 @@ def _read_package(path: Path) -> dict[str, Any]:
     return value
 
 
-def _candidate_for_package(
-    package: Mapping[str, Any], batch_id: str | None, candidates: Sequence[Mapping[str, Any]]
-) -> Mapping[str, Any]:
-    binding = package["candidate"]
+def _candidates_for_package(
+    package: Mapping[str, Any],
+    batch_id: str | None,
+    candidates: Sequence[Mapping[str, Any]],
+) -> tuple[Mapping[str, Any], ...]:
+    bindings = package["candidates"]
     if batch_id is None:
         raise PublicationError("automatic package has no current metadata batch")
     # Provider receipts and therefore batch hashes may change between the
     # discovery pass and the publication transaction. The normalized candidate
     # hash is the stable content identity; the originating batch id remains in
     # the package as audit provenance.
-    matches = [
-        candidate
-        for candidate in candidates
-        if candidate.get("id") == binding["candidate_id"]
-        and candidate.get("candidate_sha256") == binding["candidate_sha256"]
-    ]
-    if len(matches) != 1:
-        raise PublicationError("automatic package candidate hash is absent or ambiguous")
-    candidate = matches[0]
-    if candidate.get("provider") != "arxiv" or candidate.get("source_type") != "preprint":
-        raise PublicationError("automatic evidence currently permits arXiv preprints only")
-    return candidate
+    selected: list[Mapping[str, Any]] = []
+    identities: set[tuple[str, str]] = set()
+    for binding in bindings:
+        identity = (binding["candidate_id"], binding["candidate_sha256"])
+        if identity in identities:
+            raise PublicationError("automatic package repeats a candidate identity")
+        identities.add(identity)
+        matches = [
+            candidate
+            for candidate in candidates
+            if candidate.get("id") == binding["candidate_id"]
+            and candidate.get("candidate_sha256") == binding["candidate_sha256"]
+        ]
+        if len(matches) != 1:
+            raise PublicationError(
+                "automatic package candidate hash is absent or ambiguous"
+            )
+        candidate = matches[0]
+        if (
+            candidate.get("provider") != "arxiv"
+            or candidate.get("source_type") != "preprint"
+        ):
+            raise PublicationError(
+                "automatic evidence currently permits arXiv preprints only"
+            )
+        selected.append(candidate)
+    return tuple(selected)
 
 
 def _reviewed_candidate_rights(
@@ -354,83 +376,118 @@ def _extract_pdf(
 def _validate_package_semantics(
     project_root: Path,
     package: dict[str, Any],
-    candidate: Mapping[str, Any],
-    reviewed_rights: Mapping[str, Any] | None,
-) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
-    source = dict(package["source"])
-    source_id = source.get("id")
-    if not isinstance(source_id, str) or not SOURCE_ID_RE.fullmatch(source_id):
-        raise PublicationError("automatic source id must use the external arXiv namespace")
+    candidates: Sequence[Mapping[str, Any]],
+    reviewed_rights: Sequence[Mapping[str, Any] | None],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if (
         package["editor"].get("mode") != "automatic_fail_closed"
         or package["editor"].get("model") != "gpt-5.6-sol"
     ):
         raise PublicationError("automatic package must identify the approved scheduled model")
-    source_rights = source.get("rights", {})
-    rights_match = isinstance(source_rights, Mapping) and (
-        (
-            reviewed_rights is None
-            and source_rights.get("reuse_status") in {"internal_only", "unknown"}
-            and source_rights.get("public_distribution") is False
-        )
-        or (
-            reviewed_rights is not None
-            and source_rights.get("license") == reviewed_rights.get("license")
-            and source_rights.get("reuse_status")
-            == reviewed_rights.get("reuse_status")
-            and source_rights.get("public_distribution")
-            is reviewed_rights.get("public_distribution")
-        )
-    )
-    if source.get("title") != candidate.get("title"):
-        raise PublicationError(
-            "automatic source title does not exactly match the arXiv candidate"
-        )
-    if source.get("authors") != candidate.get("authors"):
-        raise PublicationError(
-            "automatic source authors do not exactly match the arXiv candidate; "
-            "copy the candidate authors verbatim"
-        )
-    if source.get("url") != candidate.get("canonical_url"):
-        raise PublicationError(
-            "automatic source URL does not exactly match the arXiv candidate"
-        )
-    if (
-        source.get("source_type") != "preprint"
-        or source.get("authority_level") != "preprint_unreviewed"
-        or source.get("publication_status") != "preprint"
+    source_rows = package["sources"]
+    if not (
+        len(source_rows) == len(candidates) == len(reviewed_rights)
+        and 1 <= len(source_rows) <= 3
     ):
         raise PublicationError(
-            "automatic source classification is not the permitted preprint form"
+            "automatic package must bind one source to each selected candidate"
         )
-    if not rights_match:
-        raise PublicationError(
-            "automatic source rights do not match the reviewed rights boundary"
-        )
-    source_sha = source.get("content_sha256")
-    if not isinstance(source_sha, str) or not SHA256_RE.fullmatch(source_sha):
-        raise PublicationError("automatic source content hash is invalid")
-    expected_date = str(candidate.get("published_at", ""))[:10]
-    if source.get("date") != expected_date:
-        raise PublicationError("automatic source publication date does not match metadata")
-    logical_path = source.get("relative_path")
-    if (
-        not isinstance(logical_path, str)
-        or not re.fullmatch(r"external/arxiv/[A-Za-z0-9._-]+\.pdf", logical_path)
+
+    sources: list[dict[str, Any]] = []
+    all_units: list[dict[str, Any]] = []
+    source_context: dict[str, tuple[str, str, int]] = {}
+    for raw_source, candidate, candidate_rights in zip(
+        source_rows, candidates, reviewed_rights, strict=True
     ):
-        raise PublicationError("automatic source must use a safe logical PDF path")
-    evidence_path = project_root / "tmp" / "automatic-evidence" / f"{source_sha}.pdf"
-    units, semantic_sha, size = _extract_pdf(
-        evidence_path, source_id, source_sha, logical_path
-    )
-    source["content_hash"] = source_sha
-    source["content_size_bytes"] = size
-    source["extract_semantic_sha256"] = semantic_sha
-    source["status"] = "available"
-    validate_records([source], project_root / "schemas" / "source.schema.json", "automatic source")
+        source = dict(raw_source)
+        source_id = source.get("id")
+        if (
+            not isinstance(source_id, str)
+            or not SOURCE_ID_RE.fullmatch(source_id)
+            or source_id in source_context
+        ):
+            raise PublicationError(
+                "automatic source ids must be unique and use the external arXiv namespace"
+            )
+        source_rights = source.get("rights", {})
+        rights_match = isinstance(source_rights, Mapping) and (
+            (
+                candidate_rights is None
+                and source_rights.get("reuse_status") in {"internal_only", "unknown"}
+                and source_rights.get("public_distribution") is False
+            )
+            or (
+                candidate_rights is not None
+                and source_rights.get("license") == candidate_rights.get("license")
+                and source_rights.get("reuse_status")
+                == candidate_rights.get("reuse_status")
+                and source_rights.get("public_distribution")
+                is candidate_rights.get("public_distribution")
+            )
+        )
+        if source.get("title") != candidate.get("title"):
+            raise PublicationError(
+                "automatic source title does not exactly match its arXiv candidate"
+            )
+        if source.get("authors") != candidate.get("authors"):
+            raise PublicationError(
+                "automatic source authors do not exactly match its arXiv candidate; "
+                "copy the candidate authors verbatim"
+            )
+        if source.get("url") != candidate.get("canonical_url"):
+            raise PublicationError(
+                "automatic source URL does not exactly match its arXiv candidate"
+            )
+        if (
+            source.get("source_type") != "preprint"
+            or source.get("authority_level") != "preprint_unreviewed"
+            or source.get("publication_status") != "preprint"
+        ):
+            raise PublicationError(
+                "automatic source classification is not the permitted preprint form"
+            )
+        if not rights_match:
+            raise PublicationError(
+                "automatic source rights do not match the reviewed rights boundary"
+            )
+        source_sha = source.get("content_sha256")
+        if not isinstance(source_sha, str) or not SHA256_RE.fullmatch(source_sha):
+            raise PublicationError("automatic source content hash is invalid")
+        expected_date = str(candidate.get("published_at", ""))[:10]
+        if source.get("date") != expected_date:
+            raise PublicationError(
+                "automatic source publication date does not match metadata"
+            )
+        logical_path = source.get("relative_path")
+        if (
+            not isinstance(logical_path, str)
+            or not re.fullmatch(
+                r"external/arxiv/[A-Za-z0-9._-]+\.pdf", logical_path
+            )
+        ):
+            raise PublicationError("automatic source must use a safe logical PDF path")
+        evidence_path = (
+            project_root / "tmp" / "automatic-evidence" / f"{source_sha}.pdf"
+        )
+        units, semantic_sha, size = _extract_pdf(
+            evidence_path, source_id, source_sha, logical_path
+        )
+        source["content_hash"] = source_sha
+        source["content_size_bytes"] = size
+        source["extract_semantic_sha256"] = semantic_sha
+        source["status"] = "available"
+        validate_records(
+            [source],
+            project_root / "schemas" / "source.schema.json",
+            "automatic source",
+        )
+        sources.append(source)
+        all_units.extend(units)
+        source_context[source_id] = (source_sha, logical_path, len(units))
 
     knowledge_records: list[dict[str, Any]] = []
-    seen: set[str] = {source_id}
+    seen: set[str] = set(source_context)
+    evidence_source_ids: set[str] = set()
     schema_by_group = {
         "claims": "claim.schema.json",
         "methods": "method.schema.json",
@@ -447,16 +504,18 @@ def _validate_package_semantics(
             seen.add(record_id)
             for evidence in record.get("evidence", []):
                 locator = evidence.get("locator", {})
+                context = source_context.get(evidence.get("source_id"))
                 if (
-                    evidence.get("source_id") != source_id
-                    or evidence.get("source_sha256") != source_sha
+                    context is None
+                    or evidence.get("source_sha256") != context[0]
                     or not isinstance(locator, Mapping)
                     or locator.get("kind") != "pdf"
-                    or locator.get("path") != logical_path
+                    or locator.get("path") != context[1]
                     or not isinstance(locator.get("page"), int)
-                    or not 1 <= locator["page"] <= len(units)
+                    or not 1 <= locator["page"] <= context[2]
                 ):
                     raise PublicationError("automatic knowledge evidence is not bound to an exact PDF page")
+                evidence_source_ids.add(evidence["source_id"])
             knowledge_records.append(dict(record))
     pulse_ids = tuple(signal["knowledge_id"] for signal in package["pulse"]["signals"])
     knowledge_ids = {record["id"] for record in knowledge_records}
@@ -464,7 +523,26 @@ def _validate_package_semantics(
         raise PublicationError("automatic pulse references unknown or duplicate knowledge ids")
     if package["pulse"]["unresolved_question"].rstrip().endswith("?") is False:
         raise PublicationError("automatic unresolved question must end in a question mark")
-    return source, units, semantic_sha
+    citations = package["pulse"]["source_citations"]
+    citation_ids = [citation["source_id"] for citation in citations]
+    if (
+        len(citation_ids) != len(set(citation_ids))
+        or set(citation_ids) != set(source_context)
+    ):
+        raise PublicationError(
+            "automatic source citations must cover every selected source exactly once"
+        )
+    if package["article_mode"] == "deep_dive" and len(sources) != 1:
+        raise PublicationError("automatic deep dive must select exactly one source")
+    if package["article_mode"] == "synthesis" and len(sources) < 2:
+        raise PublicationError(
+            "automatic synthesis must select at least two sources"
+        )
+    if evidence_source_ids != set(source_context):
+        raise PublicationError(
+            "automatic knowledge evidence must use every selected source"
+        )
+    return sources, all_units
 
 
 def _append_records(
@@ -771,19 +849,40 @@ def _artifact_payloads(
     project_root: Path,
     run_date: str,
     artifacts: Sequence[Mapping[str, Any]],
-    source: Mapping[str, Any],
-    page_count: int,
+    sources: Sequence[Mapping[str, Any]],
+    units: Sequence[Mapping[str, Any]],
 ) -> tuple[AutomaticArtifactPayload, ...]:
     slugs = [artifact["slug"] for artifact in artifacts]
     if len(slugs) != len(set(slugs)):
         raise PublicationError("automatic artifact slugs must be unique")
+    sources_by_id = {str(source["id"]): source for source in sources}
+    pages_by_source: dict[str, int] = {}
+    for unit in units:
+        source_id = str(unit["source_id"])
+        pages_by_source[source_id] = pages_by_source.get(source_id, 0) + 1
     payloads: list[AutomaticArtifactPayload] = []
     for artifact in artifacts:
         if artifact["kind"] == "diagram":
             payloads.append(_diagram_payloads(run_date, artifact))
         else:
+            source_id = (
+                artifact["generation"]["source_reference"]["source_id"]
+                if artifact["kind"] == "generated_image"
+                else artifact["source_id"]
+            )
+            source = sources_by_id.get(source_id)
+            if source is None:
+                raise PublicationError(
+                    "automatic image references an unselected source"
+                )
             payloads.append(
-                _image_payloads(project_root, run_date, artifact, source, page_count)
+                _image_payloads(
+                    project_root,
+                    run_date,
+                    artifact,
+                    source,
+                    pages_by_source[source_id],
+                )
             )
     return tuple(payloads)
 
@@ -840,27 +939,40 @@ def validate_automatic_package(
     )
     if package.get("date") != run_date:
         raise PublicationError("automatic editorial package date does not match the run")
-    candidate = _candidate_for_package(package, batch_id, candidates)
-    candidate_identity = normalize_external_identity(candidate.get("canonical_url"))
+    selected_candidates = _candidates_for_package(package, batch_id, candidates)
     try:
         accepted_identities = accepted_external_identities(project_root, checkpoint)
     except Exception as exc:
         raise PublicationError("accepted external source history is invalid") from exc
-    if candidate_identity is None or candidate_identity in accepted_identities:
+    selected_identities = [
+        normalize_external_identity(candidate.get("canonical_url"))
+        for candidate in selected_candidates
+    ]
+    if (
+        any(identity is None for identity in selected_identities)
+        or len(set(selected_identities)) != len(selected_identities)
+    ):
+        raise PublicationError(
+            "automatic editorial candidate source version is invalid or repeated"
+        )
+    if any(identity in accepted_identities for identity in selected_identities):
         raise PublicationError(
             "automatic editorial candidate source version is already accepted"
         )
-    reviewed_rights = _reviewed_candidate_rights(project_root, candidate)
-    source, units, _ = _validate_package_semantics(
-        project_root, package, candidate, reviewed_rights
+    reviewed_rights = tuple(
+        _reviewed_candidate_rights(project_root, candidate)
+        for candidate in selected_candidates
+    )
+    sources, units = _validate_package_semantics(
+        project_root, package, selected_candidates, reviewed_rights
     )
     pulse_ids = tuple(signal["knowledge_id"] for signal in package["pulse"]["signals"])
     artifact_payloads = _artifact_payloads(
-        project_root, run_date, package["artifacts"], source, len(units)
+        project_root, run_date, package["artifacts"], sources, units
     )
     return AutomaticPackageValidation(
         package=package,
-        source=source,
+        sources=tuple(sources),
         units=tuple(units),
         artifact_payloads=artifact_payloads,
         pulse_ids=pulse_ids,
@@ -885,7 +997,7 @@ def load_and_materialize_automatic_package(
     if validation is None:
         return None
     package = validation.package
-    source = validation.source
+    sources = validation.sources
     units = validation.units
     artifact_payloads = validation.artifact_payloads
     materialization = AutomaticMaterialization(
@@ -894,14 +1006,14 @@ def load_and_materialize_automatic_package(
         artifact_manifest_urls=tuple(
             payload.manifest_url for payload in artifact_payloads
         ),
-        source_id=str(source["id"]),
+        source_ids=tuple(str(source["id"]) for source in sources),
         knowledge_ids=validation.pulse_ids,
     )
     try:
         _append_records(
             materialization,
             project_root / "knowledge" / "curated" / "sources.jsonl",
-            [source],
+            sources,
         )
         group_files = {
             "claims": "claims.jsonl",
@@ -915,11 +1027,19 @@ def load_and_materialize_automatic_package(
                 project_root / "knowledge" / "curated" / filename,
                 package["knowledge"][group],
             )
-        materialization.install(
-            project_root / "data" / "automatic" / "extracts" / f"{source['id']}.jsonl",
-            _jsonl_bytes(units),
-            0o600,
-        )
+        for source in sources:
+            source_units = [
+                unit for unit in units if unit["source_id"] == source["id"]
+            ]
+            materialization.install(
+                project_root
+                / "data"
+                / "automatic"
+                / "extracts"
+                / f"{source['id']}.jsonl",
+                _jsonl_bytes(source_units),
+                0o600,
+            )
         for artifact_payload in artifact_payloads:
             artifact_root = (
                 project_root

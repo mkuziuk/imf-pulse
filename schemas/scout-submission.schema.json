@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/scout-submission.schema.json",
+  "title": "Private Luna scouting submission",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "edition_date",
+    "slot",
+    "model",
+    "reasoning_effort",
+    "batch_id",
+    "batch_sha256",
+    "reviewed_at",
+    "cards"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "edition_date": {"$ref": "common.schema.json#/$defs/calendarDate"},
+    "slot": {"enum": ["morning", "midday", "afternoon", "evening"]},
+    "model": {"const": "gpt-5.6-luna"},
+    "reasoning_effort": {"const": "high"},
+    "batch_id": {"type": "string", "pattern": "^external-batch-[0-9a-f]{20}$"},
+    "batch_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "reviewed_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "cards": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {"$ref": "#/$defs/card"}
+    }
+  },
+  "$defs": {
+    "card": {
+      "type": "object",
+      "required": [
+        "candidate_id",
+        "candidate_sha256",
+        "canonical_url",
+        "title",
+        "relevance_score",
+        "why_interesting",
+        "novelty_hypothesis",
+        "cluster_keys",
+        "uncertainties",
+        "evidence_availability"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^candidate-(?:arxiv|crossref)-[0-9a-f]{20}$"
+        },
+        "candidate_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+        "canonical_url": {
+          "type": "string",
+          "pattern": "^https://(?:arxiv\\.org/abs/[^?#]+|doi\\.org/10\\.[^?#]+)$"
+        },
+        "title": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "relevance_score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "why_interesting": {"type": "string", "minLength": 20, "maxLength": 2000},
+        "novelty_hypothesis": {"type": "string", "minLength": 20, "maxLength": 2000},
+        "cluster_keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {"$ref": "common.schema.json#/$defs/identifier"}
+        },
+        "uncertainties": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "evidence_availability": {
+          "enum": [
+            "official_arxiv_pdf_available",
+            "metadata_only",
+            "full_text_not_allowlisted"
+          ]
+        },
+        "seen_in_slots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["morning", "midday", "afternoon", "evening"]
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
