@@ -1,5 +1,9 @@
 # Automatic literature editor
 
+> Superseded for scheduled automation by `automatic-editor-offline.md`. This
+> document remains as historical editorial guidance; scheduled Sol must not use
+> its network-fetch steps.
+
 Prepare at most one automatic pulse package for today's hash-bound immutable external batch. The package may be a one-paper deep dive or a coherent synthesis of two or three papers.
 
 1. Do not rely on prior task conversations. Before fetching a PDF, run `scripts/build_editorial_context.py`, compare the entire bounded candidate batch with its sealed coverage index, and read the full `bound_pulse` bodies only for the prior pulses you judge most topically similar.

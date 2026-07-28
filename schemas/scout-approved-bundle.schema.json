@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/scout-approved-bundle.schema.json",
+  "title": "Security-approved editorial bundle",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "edition_date",
+    "approved_at",
+    "status",
+    "audit_input_sha256",
+    "audit_verdict_sha256",
+    "batch_id",
+    "batch_sha256",
+    "batch_path",
+    "candidates",
+    "bundle_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "edition_date": {"$ref": "common.schema.json#/$defs/calendarDate"},
+    "approved_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "status": {"enum": ["ready", "no_candidates", "rejected"]},
+    "audit_input_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "audit_verdict_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "batch_id": {
+      "oneOf": [
+        {"type": "string", "pattern": "^external-batch-[0-9a-f]{20}$"},
+        {"type": "null"}
+      ]
+    },
+    "batch_sha256": {
+      "oneOf": [
+        {"$ref": "common.schema.json#/$defs/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "batch_path": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^data/external/batches/external-batch-[0-9a-f]{20}\\.json$"
+        },
+        {"type": "null"}
+      ]
+    },
+    "candidates": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": [
+          "candidate",
+          "luna_card",
+          "aegis_review",
+          "evidence",
+          "extract_path"
+        ],
+        "properties": {
+          "candidate": {"$ref": "external-candidate.schema.json"},
+          "luna_card": {"$ref": "scout-submission.schema.json#/$defs/card"},
+          "aegis_review": {
+            "type": "object",
+            "required": ["reason", "security_notes"],
+            "properties": {
+              "reason": {"type": "string", "minLength": 20, "maxLength": 1000},
+              "security_notes": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 6,
+                "items": {"type": "string", "minLength": 1, "maxLength": 500}
+              }
+            },
+            "additionalProperties": false
+          },
+          "evidence": {
+            "type": "object",
+            "required": [
+              "content_sha256",
+              "bytes",
+              "path",
+              "logical_path",
+              "source_url",
+              "pdf_url",
+              "extract_semantic_sha256",
+              "page_count"
+            ],
+            "properties": {
+              "content_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+              "bytes": {"type": "integer", "minimum": 1, "maximum": 33554432},
+              "path": {
+                "type": "string",
+                "pattern": "^tmp/automatic-evidence/[0-9a-f]{64}\\.pdf$"
+              },
+              "logical_path": {
+                "type": "string",
+                "pattern": "^external/arxiv/[A-Za-z0-9._-]+\\.pdf$"
+              },
+              "source_url": {"type": "string", "pattern": "^https://arxiv\\.org/abs/[^?#]+$"},
+              "pdf_url": {"type": "string", "pattern": "^https://arxiv\\.org/pdf/[^?#]+$"},
+              "extract_semantic_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+              "page_count": {"type": "integer", "minimum": 1, "maximum": 500}
+            },
+            "additionalProperties": false
+          },
+          "extract_path": {
+            "type": "string",
+            "pattern": "^data/automatic/security/extracts/[a-z0-9-]+\\.jsonl$"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "bundle_sha256": {"$ref": "common.schema.json#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "ready"}}},
+      "then": {
+        "properties": {
+          "batch_id": {"type": "string"},
+          "batch_sha256": {"type": "string"},
+          "batch_path": {"type": "string"},
+          "candidates": {"minItems": 1}
+        }
+      },
+      "else": {
+        "properties": {
+          "batch_id": {"type": "null"},
+          "batch_sha256": {"type": "null"},
+          "batch_path": {"type": "null"},
+          "candidates": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

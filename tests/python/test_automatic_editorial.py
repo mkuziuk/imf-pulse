@@ -10,6 +10,7 @@ import pytest
 from pypdf import PdfWriter
 
 import research_pipeline.automatic as automatic_module
+import research_pipeline.scout_security as scout_security_module
 from research_pipeline.automatic import (
     load_and_materialize_automatic_package,
     validate_automatic_package,
@@ -26,6 +27,30 @@ SOURCE_ID = "src-external-arxiv-2607-12345v1"
 SECOND_CANDIDATE_ID = "candidate-arxiv-22222222222222222222"
 SECOND_CANDIDATE_SHA = "5" * 64
 SECOND_SOURCE_ID = "src-external-arxiv-2607-54321v1"
+
+
+@pytest.fixture(autouse=True)
+def _approved_security_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
+    def approved(
+        root: Path, _run_date: str, candidates: list[dict]
+    ) -> dict[tuple[str, str], dict[str, object]]:
+        package = json.loads(
+            (root / "data" / "automatic" / "packages" / f"{DATE}.json").read_text()
+        )
+        by_url = {source["url"]: source for source in package["sources"]}
+        return {
+            (candidate["id"], candidate["candidate_sha256"]): {
+                "content_sha256": by_url[candidate["canonical_url"]][
+                    "content_sha256"
+                ],
+                "logical_path": by_url[candidate["canonical_url"]]["relative_path"],
+            }
+            for candidate in candidates
+        }
+
+    monkeypatch.setattr(
+        scout_security_module, "approved_evidence_by_candidate", approved
+    )
 
 
 def _project(tmp_path: Path) -> Path:

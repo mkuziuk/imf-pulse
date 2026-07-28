@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/scout-audit-verdict.schema.json",
+  "title": "Aegis candidate verdict",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "edition_date",
+    "input_sha256",
+    "auditor",
+    "reviewed_at",
+    "overall_risk_summary",
+    "candidates"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "edition_date": {"$ref": "common.schema.json#/$defs/calendarDate"},
+    "input_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "auditor": {"const": "Aegis"},
+    "reviewed_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "overall_risk_summary": {"type": "string", "minLength": 20, "maxLength": 2000},
+    "candidates": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "candidate_sha256",
+          "decision",
+          "reason",
+          "security_notes"
+        ],
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "pattern": "^candidate-(?:arxiv|crossref)-[0-9a-f]{20}$"
+          },
+          "candidate_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+          "decision": {"enum": ["approved", "rejected"]},
+          "reason": {"type": "string", "minLength": 20, "maxLength": 1000},
+          "security_notes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {"type": "string", "minLength": 1, "maxLength": 500}
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

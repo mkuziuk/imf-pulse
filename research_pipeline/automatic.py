@@ -963,9 +963,24 @@ def validate_automatic_package(
         _reviewed_candidate_rights(project_root, candidate)
         for candidate in selected_candidates
     )
+    from .scout_security import approved_evidence_by_candidate
+
+    approved_evidence = approved_evidence_by_candidate(
+        project_root, run_date, selected_candidates
+    )
     sources, units = _validate_package_semantics(
         project_root, package, selected_candidates, reviewed_rights
     )
+    for candidate, source in zip(selected_candidates, sources, strict=True):
+        identity = (str(candidate["id"]), str(candidate["candidate_sha256"]))
+        evidence = approved_evidence[identity]
+        if (
+            source.get("content_sha256") != evidence.get("content_sha256")
+            or source.get("relative_path") != evidence.get("logical_path")
+        ):
+            raise PublicationError(
+                "automatic source bytes were not approved by the Aegis security gate"
+            )
     pulse_ids = tuple(signal["knowledge_id"] for signal in package["pulse"]["signals"])
     artifact_payloads = _artifact_payloads(
         project_root, run_date, package["artifacts"], sources, units
