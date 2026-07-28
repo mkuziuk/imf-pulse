@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from research_pipeline.external import (
+    ExternalMetadataRateLimit,
     ExternalMonitoringError,
     FetchedMetadata,
     build_arxiv_request,
@@ -229,6 +230,46 @@ def test_search_writes_private_receipt_public_safe_batch_and_deduplicates(
     assert third == second
 
 
+def test_rate_limit_resume_reuses_completed_query_receipts(tmp_path: Path) -> None:
+    first_urls: list[str] = []
+
+    def interrupted(url: str, **_: object) -> bytes:
+        first_urls.append(url)
+        if len(first_urls) == 3:
+            raise ExternalMetadataRateLimit(
+                "metadata endpoint returned HTTP 429", retry_after_seconds=120
+            )
+        return atom_feed() if "export.arxiv.org" in url else crossref_response()
+
+    with pytest.raises(ExternalMetadataRateLimit, match="crossref query"):
+        run_external_search(
+            CONFIG,
+            tmp_path,
+            "2026-07-23T08:00:00+03:00",
+            fetcher=interrupted,
+            sleeper=lambda _: None,
+        )
+    assert len(first_urls) == 3
+
+    resumed_urls: list[str] = []
+
+    def resumed(url: str, **_: object) -> bytes:
+        resumed_urls.append(url)
+        return atom_feed() if "export.arxiv.org" in url else crossref_response()
+
+    result = run_external_search(
+        CONFIG,
+        tmp_path,
+        "2026-07-23T08:00:00+03:00",
+        fetcher=resumed,
+        sleeper=lambda _: None,
+    )
+
+    assert result["candidate_count"] == 1
+    assert len(resumed_urls) == 4
+    assert all("export.arxiv.org" not in url for url in resumed_urls)
+
+
 def test_search_excludes_source_version_already_in_accepted_release(
     tmp_path: Path,
 ) -> None:
@@ -321,10 +362,14 @@ def test_crossref_journal_candidate_is_literature_first_and_public_safe(
 def test_candidate_identity_hash_changes_with_metadata_but_stable_id_does_not(
     tmp_path: Path,
 ) -> None:
-    first, _ = run_search(tmp_path, atom_feed(title="First title"))
-    first_candidate = json.loads((tmp_path / first["batch_path"]).read_text())["candidates"][0]
-    second, _ = run_search(tmp_path, atom_feed(title="Corrected title", suffix="revision"))
-    second_candidate = json.loads((tmp_path / second["batch_path"]).read_text())["candidates"][0]
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first_root.mkdir()
+    second_root.mkdir()
+    first, _ = run_search(first_root, atom_feed(title="First title"))
+    first_candidate = json.loads((first_root / first["batch_path"]).read_text())["candidates"][0]
+    second, _ = run_search(second_root, atom_feed(title="Corrected title", suffix="revision"))
+    second_candidate = json.loads((second_root / second["batch_path"]).read_text())["candidates"][0]
     assert first_candidate["id"] == second_candidate["id"]
     assert first_candidate["candidate_sha256"] != second_candidate["candidate_sha256"]
 

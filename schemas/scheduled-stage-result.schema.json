@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://imf-pulse.local/schemas/scheduled-stage-result.schema.json",
+  "title": "Immutable scheduled workflow stage result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "stage",
+    "input_sha256",
+    "completed_at",
+    "outputs",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "run_id": {"type": "string", "pattern": "^scheduled-[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "stage": {
+      "enum": [
+        "synchronize_base",
+        "discover",
+        "select",
+        "materialize_source",
+        "author",
+        "validate",
+        "publish_local",
+        "commit",
+        "push",
+        "verify_deployment"
+      ]
+    },
+    "input_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "outputs": {"type": "object"},
+    "receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

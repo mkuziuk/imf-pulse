@@ -9,14 +9,20 @@ import stat
 import subprocess
 import time
 from dataclasses import dataclass
-from datetime import date as calendar_date
+from datetime import date as calendar_date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping, Sequence
 
 from .config import load_yaml
-from .external_preflight import scheduled_outcome_path
+from .external_preflight import (
+    load_ready_scheduled_search_batch,
+    load_scheduled_search_outcome,
+    scheduled_outcome_path,
+)
+from .hashing import sha256_file
 from .pulse_identity import parse_pulse_path
 from .validation import validate_records
+from .workflow import WorkflowStore
 
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -34,6 +40,10 @@ CURATED_KNOWLEDGE = PUBLIC_KNOWLEDGE
 
 class ScheduledPublishError(RuntimeError):
     """A scheduled Git or deployment safety condition was not satisfied."""
+
+
+class ScheduledRetryableError(ScheduledPublishError):
+    """A transient GitHub or network operation can resume without new research."""
 
 
 CommandRunner = Callable[
@@ -88,7 +98,11 @@ def _run(
     timeout: int = 120,
     expected: tuple[int, ...] = (0,),
 ) -> subprocess.CompletedProcess[str]:
-    completed = runner(command, project_root, timeout)
+    try:
+        completed = runner(command, project_root, timeout)
+    except subprocess.TimeoutExpired as exc:
+        label = " ".join(command[:3])
+        raise ScheduledRetryableError(f"command timed out ({label})") from exc
     if completed.returncode not in expected:
         label = " ".join(command[:3])
         detail = (completed.stderr or completed.stdout).strip().splitlines()
@@ -185,7 +199,12 @@ def _clean_worktree(runner: CommandRunner, project_root: Path) -> bool:
 
 
 def _git_preflight(
-    runner: CommandRunner, project_root: Path, publication: Mapping[str, Any]
+    runner: CommandRunner,
+    project_root: Path,
+    publication: Mapping[str, Any],
+    *,
+    allow_publication_changes: bool = False,
+    preserve_head: bool = False,
 ) -> str:
     top = _run(runner, project_root, ("git", "rev-parse", "--show-toplevel")).stdout.strip()
     if Path(top).resolve(strict=True) != project_root:
@@ -200,7 +219,8 @@ def _git_preflight(
     ).stdout.strip()
     if not _remote_matches(remote_url, str(publication["repository"])):
         raise ScheduledPublishError("origin does not target the approved public repository")
-    if not _clean_worktree(runner, project_root):
+    clean = _clean_worktree(runner, project_root)
+    if not clean and not allow_publication_changes:
         raise ScheduledPublishError("tracked worktree must be clean before the daily run")
     _run(runner, project_root, ("gh", "auth", "status", "--hostname", "github.com"))
     _run(
@@ -215,8 +235,29 @@ def _git_preflight(
         project_root,
         ("git", "rev-parse", f"refs/remotes/{publication['remote']}/{publication['branch']}"),
     ).stdout.strip()
-    if not SHA_RE.fullmatch(head) or head != upstream:
-        raise ScheduledPublishError("local main must exactly match origin/main")
+    if not SHA_RE.fullmatch(head) or not SHA_RE.fullmatch(upstream):
+        raise ScheduledPublishError("Git returned an invalid main branch identity")
+    if head != upstream:
+        ancestor = _run(
+            runner,
+            project_root,
+            ("git", "merge-base", "--is-ancestor", head, upstream),
+            expected=(0, 1),
+        )
+        if ancestor.returncode == 0 and clean and not preserve_head:
+            _run(
+                runner,
+                project_root,
+                ("git", "merge", "--ff-only", upstream),
+                timeout=180,
+            )
+            head = _run(
+                runner, project_root, ("git", "rev-parse", "HEAD")
+            ).stdout.strip()
+            if head != upstream:
+                raise ScheduledPublishError("clean stale main did not fast-forward exactly")
+        elif not allow_publication_changes:
+            raise ScheduledPublishError("local main has unrecognized divergence from origin/main")
     return head
 
 
@@ -291,6 +332,81 @@ def _changed_paths(runner: CommandRunner, project_root: Path) -> list[tuple[str,
         ("git", "ls-files", "--others", "--exclude-standard"),
     ).stdout.splitlines()
     return [*tracked, *(("?", path) for path in untracked if path)]
+
+
+def _committed_changes(
+    runner: CommandRunner, project_root: Path, base: str, head: str
+) -> list[tuple[str, str]]:
+    return _name_status(
+        _run(
+            runner,
+            project_root,
+            ("git", "diff", "--name-status", "--no-renames", f"{base}..{head}", "--"),
+        ).stdout
+    )
+
+
+def _touches_publication_state(path: str) -> bool:
+    return path.startswith(
+        (
+            "content/pulses/",
+            "knowledge/curated/",
+            "public/artifacts/",
+            "public-release/",
+        )
+    )
+
+
+def _rebase_unpushed_publication(
+    runner: CommandRunner,
+    project_root: Path,
+    publication: Mapping[str, Any],
+    *,
+    base_head: str,
+    upstream: str,
+    run_date: str,
+    pulse_path: str,
+) -> str:
+    ancestor = _run(
+        runner,
+        project_root,
+        ("git", "merge-base", "--is-ancestor", base_head, upstream),
+        expected=(0, 1),
+    )
+    if ancestor.returncode != 0:
+        raise ScheduledPublishError("origin/main no longer descends from the publication base")
+    remote_changes = _committed_changes(runner, project_root, base_head, upstream)
+    if any(_touches_publication_state(path) for _, path in remote_changes):
+        raise ScheduledPublishError(
+            "origin/main changed accepted publication state; manual reconciliation is required"
+        )
+    try:
+        _run(runner, project_root, ("git", "rebase", upstream), timeout=300)
+    except ScheduledPublishError:
+        try:
+            _run(runner, project_root, ("git", "rebase", "--abort"), timeout=120)
+        except ScheduledPublishError:
+            pass
+        raise ScheduledPublishError(
+            "the publication commit could not be rebased safely"
+        )
+    rebased = _run(runner, project_root, ("git", "rev-parse", "HEAD")).stdout.strip()
+    if not SHA_RE.fullmatch(rebased) or rebased == upstream:
+        raise ScheduledPublishError("rebased publication commit identity is invalid")
+    changes = _committed_changes(runner, project_root, upstream, rebased)
+    paths = _validate_publish_changes(changes, run_date, pulse_path)
+    _validate_publish_files(project_root, paths)
+    python = project_root / ".venv" / "bin" / "python"
+    _run(
+        runner,
+        project_root,
+        (str(python), "scripts/audit_public_release.py", "--directory", str(publication["public_release_directory"])),
+        timeout=300,
+    )
+    _run(runner, project_root, (str(python), "-m", "pytest"), timeout=3600)
+    _run(runner, project_root, ("npm", "test"), timeout=1800)
+    _run(runner, project_root, ("npm", "run", "build"), timeout=1800)
+    return rebased
 
 
 def _validate_publish_changes(
@@ -433,65 +549,509 @@ def _deploy(
     return run_url, str(publication["site_url"])
 
 
+def prepare_scheduled_pipeline(
+    project_root: Path,
+    *,
+    run_date: str,
+    runner: CommandRunner = _default_runner,
+) -> dict[str, Any]:
+    """Synchronize and discover once, then return the resumable editor handoff."""
+
+    from .external import (
+        ExternalMetadataRateLimit,
+        ExternalMetadataTimeout,
+        run_external_search,
+    )
+    from .external_preflight import write_scheduled_search_outcome
+
+    run_date = _parse_date(run_date)
+    project_root = project_root.resolve(strict=True)
+    workflow = WorkflowStore(project_root, run_date)
+    failure = workflow.value.get("failure")
+    if (
+        workflow.stage("discover") is None
+        and isinstance(failure, Mapping)
+        and failure.get("stage") == "discover"
+        and isinstance(failure.get("retry_not_before"), str)
+    ):
+        retry_at = datetime.fromisoformat(
+            str(failure["retry_not_before"]).replace("Z", "+00:00")
+        )
+        if retry_at > datetime.now(timezone.utc):
+            return {"status": "deferred", "workflow": workflow.as_dict()}
+    publication = _publication_policy(project_root)
+    sync = workflow.stage("synchronize_base")
+    base = _git_preflight(
+        runner,
+        project_root,
+        publication,
+        allow_publication_changes=sync is not None,
+        preserve_head=sync is not None,
+    )
+    if sync is None:
+        workflow.complete_stage(
+            "synchronize_base",
+            {
+                "remote": publication["remote"],
+                "branch": publication["branch"],
+                "repository": publication["repository"],
+            },
+            {"base_head": base},
+        )
+    elif base != sync["outputs"]["base_head"]:
+        raise ScheduledPublishError("the prepared workflow base changed locally")
+    existing = workflow.stage("discover")
+    if existing is not None:
+        candidate_count = existing.get("outputs", {}).get("candidate_count")
+        return {
+            "status": "no_candidates" if candidate_count == 0 else "awaiting_editorial",
+            "candidate_count": candidate_count,
+            "workflow": workflow.as_dict(),
+        }
+    as_of = f"{run_date}T06:00:00+03:00"
+    try:
+        result = run_external_search(
+            project_root / "config" / "external-sources.yaml",
+            project_root,
+            as_of,
+        )
+    except ExternalMetadataRateLimit as exc:
+        delay = exc.retry_after_seconds if exc.retry_after_seconds is not None else 3600
+        retry_at = (
+            datetime.now(timezone.utc) + timedelta(seconds=max(60, delay))
+        ).isoformat(timespec="seconds").replace("+00:00", "Z")
+        write_scheduled_search_outcome(
+            project_root,
+            run_date=run_date,
+            as_of=as_of,
+            status="deferred",
+            reason=str(exc),
+        )
+        workflow.record_failure(
+            stage="discover",
+            classification="retryable",
+            code="provider_rate_limited",
+            reason=str(exc),
+            retry_not_before=retry_at,
+        )
+        return {"status": "deferred", "workflow": workflow.as_dict()}
+    except ExternalMetadataTimeout as exc:
+        write_scheduled_search_outcome(
+            project_root,
+            run_date=run_date,
+            as_of=as_of,
+            status="deferred",
+            reason=str(exc),
+        )
+        workflow.record_failure(
+            stage="discover",
+            classification="deferred",
+            code="provider_timeout",
+            reason=str(exc),
+        )
+        return {"status": "deferred", "workflow": workflow.as_dict()}
+    outcome_path = write_scheduled_search_outcome(
+        project_root,
+        run_date=run_date,
+        as_of=as_of,
+        status="ready",
+        reason="metadata search completed and bound an immutable candidate batch",
+        search_result=result,
+    )
+    outcome = load_scheduled_search_outcome(
+        project_root, outcome_path, run_date=run_date
+    )
+    workflow.complete_stage(
+        "discover",
+        {"date": run_date, "as_of": outcome["as_of"]},
+        {
+            "status": outcome["status"],
+            "outcome_sha256": outcome["outcome_sha256"],
+            "batch_id": outcome["batch_id"],
+            "batch_sha256": outcome["batch_sha256"],
+            "batch_path": outcome["batch_path"],
+            "candidate_count": result["candidate_count"],
+        },
+    )
+    return {
+        "status": "awaiting_editorial" if result["candidate_count"] else "no_candidates",
+        "candidate_count": result["candidate_count"],
+        "batch_path": result["batch_path"],
+        "workflow": workflow.as_dict(),
+    }
+
+
+def select_scheduled_candidate(
+    project_root: Path,
+    *,
+    run_date: str,
+    candidate_id: str,
+    candidate_sha256: str,
+    runner: CommandRunner = _default_runner,
+) -> dict[str, Any]:
+    """Bind one exact eligible candidate and materialize its official PDF once."""
+
+    from .external_identity import accepted_external_identities, normalize_external_identity
+    from .release import _read_current_pointer
+
+    run_date = _parse_date(run_date)
+    project_root = project_root.resolve(strict=True)
+    workflow = WorkflowStore(project_root, run_date)
+    outcome, batch = load_ready_scheduled_search_batch(
+        project_root, scheduled_outcome_path(run_date), run_date=run_date
+    )
+    if workflow.stage("discover") is None:
+        workflow.complete_stage(
+            "discover",
+            {"date": run_date, "as_of": outcome["as_of"]},
+            {
+                "status": outcome["status"],
+                "outcome_sha256": outcome["outcome_sha256"],
+                "batch_id": outcome["batch_id"],
+                "batch_sha256": outcome["batch_sha256"],
+                "batch_path": outcome["batch_path"],
+            },
+        )
+    matches = [
+        candidate
+        for candidate in batch["candidates"]
+        if candidate.get("id") == candidate_id
+        and candidate.get("candidate_sha256") == candidate_sha256
+    ]
+    if len(matches) != 1 or matches[0].get("provider") != "arxiv":
+        raise ScheduledPublishError("exact arXiv candidate is absent or ambiguous")
+    identity = normalize_external_identity(matches[0].get("canonical_url"))
+    if identity is None or identity in accepted_external_identities(
+        project_root, _read_current_pointer(project_root)
+    ):
+        raise ScheduledPublishError("selected source version is already accepted")
+    selected = workflow.complete_stage(
+        "select",
+        {
+            "batch_sha256": outcome["batch_sha256"],
+            "candidate_id": candidate_id,
+            "candidate_sha256": candidate_sha256,
+        },
+        {"candidate_id": candidate_id, "candidate_sha256": candidate_sha256},
+    )
+    materialized = workflow.stage("materialize_source")
+    if materialized is None:
+        completed = _run(
+            runner,
+            project_root,
+            (
+                str(project_root / ".venv" / "bin" / "python"),
+                "scripts/fetch_arxiv_evidence.py",
+                "--project-root",
+                str(project_root),
+                "--batch",
+                str(project_root / str(outcome["batch_path"])),
+                "--candidate-id",
+                candidate_id,
+                "--candidate-sha256",
+                candidate_sha256,
+            ),
+            timeout=180,
+            expected=(0, 3),
+        )
+        evidence = _single_json(completed.stdout, "arXiv evidence fetch")
+        if completed.returncode == 3:
+            if not isinstance(evidence, Mapping) or evidence.get("status") != "deferred":
+                raise ScheduledPublishError("arXiv evidence deferral is malformed")
+            delay = evidence.get("retry_after_seconds")
+            retry_at = None
+            if type(delay) is int:
+                retry_at = (
+                    datetime.now(timezone.utc) + timedelta(seconds=max(60, delay))
+                ).isoformat(timespec="seconds").replace("+00:00", "Z")
+            workflow.record_failure(
+                stage="materialize_source",
+                classification="retryable",
+                code="arxiv_evidence_deferred",
+                reason=str(evidence.get("reason", "arXiv evidence fetch was deferred")),
+                retry_not_before=retry_at,
+            )
+            return {"status": "deferred", "workflow": workflow.as_dict()}
+        if not isinstance(evidence, Mapping) or evidence.get("status") != "fetched":
+            raise ScheduledPublishError("arXiv evidence fetch returned an invalid result")
+        versioned = str(matches[0]["versioned_external_id"]).replace("/", "-").casefold()
+        source_suffix = re.sub(r"[^a-z0-9]+", "-", versioned).strip("-")
+        materialized = workflow.complete_stage(
+            "materialize_source",
+            {
+                "selection_receipt_sha256": selected["receipt_sha256"],
+                "pdf_sha256": evidence["content_sha256"],
+            },
+            {
+                "source_id": f"src-external-arxiv-{source_suffix}",
+                "pdf_sha256": evidence["content_sha256"],
+                "path": evidence["path"],
+                "logical_path": evidence["logical_path"],
+            },
+        )
+    return {"status": "awaiting_editorial", "workflow": workflow.as_dict(), "source": materialized["outputs"]}
+
+
 def run_scheduled_pipeline(
     project_root: Path,
     *,
     run_date: str,
     runner: CommandRunner = _default_runner,
 ) -> ScheduledRunResult:
-    """Run once; commit, push, and await Pages only for a published pulse."""
+    """Advance one date-scoped run from its earliest incomplete stage."""
 
     run_date = _parse_date(run_date)
     project_root = project_root.resolve(strict=True)
     daily: dict[str, Any] | None = None
     commit_sha: str | None = None
+    workflow: WorkflowStore | None = None
+    current_stage = "synchronize_base"
     try:
+        workflow = WorkflowStore(project_root, run_date)
+        completed_outcome = workflow.value.get("outcome")
+        publish_reference = workflow.stage("publish_local")
+        if publish_reference is not None:
+            stored_daily = publish_reference.get("outputs", {}).get("daily")
+            if isinstance(stored_daily, Mapping):
+                daily = dict(stored_daily)
+        if isinstance(completed_outcome, Mapping):
+            status = str(completed_outcome["status"])
+            return ScheduledRunResult(
+                status=status,
+                date=run_date,
+                reason=str(completed_outcome["reason"]),
+                daily=daily,
+                deployment_status=("deployed" if status == "published" else "not_requested"),
+                commit_sha=completed_outcome.get("commit_sha"),
+                workflow_run_url=completed_outcome.get("workflow_run_url"),
+                site_url=completed_outcome.get("site_url"),
+            )
+        failure = workflow.value.get("failure")
+        if isinstance(failure, Mapping) and failure.get("classification") == "terminal":
+            return ScheduledRunResult(
+                status="failed",
+                date=run_date,
+                reason=str(failure["reason"]),
+                daily=daily,
+                deployment_status="failed" if daily else "blocked",
+            )
+        if isinstance(failure, Mapping) and isinstance(failure.get("retry_not_before"), str):
+            retry_at = datetime.fromisoformat(
+                str(failure["retry_not_before"]).replace("Z", "+00:00")
+            )
+            if retry_at > datetime.now(timezone.utc):
+                return ScheduledRunResult(
+                    status="deferred",
+                    date=run_date,
+                    reason=str(failure["reason"]),
+                    daily=daily,
+                    deployment_status="pending" if daily else "not_requested",
+                )
+
         publication = _publication_policy(project_root)
-        base_head = _git_preflight(runner, project_root, publication)
-        python = project_root / ".venv" / "bin" / "python"
-        daily_command = [
-            str(python),
-            "scripts/run_daily_pipeline.py",
-            "--project-root",
-            str(project_root),
-            "--mode",
-            "live",
-            "--date",
-            run_date,
-        ]
-        preflight_relative = scheduled_outcome_path(run_date)
-        try:
-            os.lstat(project_root / preflight_relative)
-        except FileNotFoundError:
-            pass
-        else:
-            daily_command.extend(("--external-search-outcome", preflight_relative))
-        completed = _run(
+        sync = workflow.stage("synchronize_base")
+        allow_changes = sync is not None and workflow.stage("push") is None
+        base_head = _git_preflight(
             runner,
             project_root,
-            tuple(daily_command),
-            timeout=3600,
-            expected=(0, 2),
+            publication,
+            allow_publication_changes=allow_changes,
+            preserve_head=sync is not None,
         )
-        daily = _parse_daily_result(project_root, completed)
-        if daily["status"] != "published":
-            if not _clean_worktree(runner, project_root):
-                raise ScheduledPublishError(
-                    "a non-published daily run left public Git changes; nothing was staged"
-                )
-            return ScheduledRunResult(
-                status=str(daily["status"]),
-                date=run_date,
-                reason=str(daily["reason"]),
-                daily=daily,
-                deployment_status="not_requested",
+        if sync is None:
+            sync = workflow.complete_stage(
+                "synchronize_base",
+                {
+                    "remote": publication["remote"],
+                    "branch": publication["branch"],
+                    "repository": publication["repository"],
+                },
+                {"base_head": base_head},
             )
+        elif (
+            workflow.stage("commit") is None
+            and workflow.stage("publish_local") is None
+            and base_head != sync["outputs"]["base_head"]
+        ):
+            raise ScheduledPublishError("the prepared workflow base changed locally")
+        workflow_base = str(sync["outputs"]["base_head"])
 
-        pulse_path = daily.get("pulse_path")
-        pulse_identity = (
-            parse_pulse_path(pulse_path) if isinstance(pulse_path, str) else None
-        )
-        if daily.get("release_advanced") is not True or (
+        python = project_root / ".venv" / "bin" / "python"
+        preflight_relative = scheduled_outcome_path(run_date)
+        preflight_path = project_root / preflight_relative
+        if preflight_path.exists() and workflow.stage("discover") is None:
+            current_stage = "discover"
+            preflight = load_scheduled_search_outcome(
+                project_root, preflight_relative, run_date=run_date
+            )
+            if preflight["status"] == "failed":
+                reason = str(preflight["reason"])
+                if "429" in reason or "rate limit" in reason.casefold():
+                    workflow.record_failure(
+                        stage="discover",
+                        classification="deferred",
+                        code="provider_rate_limited",
+                        reason=reason,
+                    )
+                    return ScheduledRunResult(
+                        status="deferred",
+                        date=run_date,
+                        reason=reason,
+                        daily=None,
+                        deployment_status="not_requested",
+                    )
+                raise ScheduledPublishError(
+                    f"scheduled external metadata preflight failed: {reason}"
+                )
+            workflow.complete_stage(
+                "discover",
+                {"date": run_date, "as_of": preflight["as_of"]},
+                {
+                    "status": preflight["status"],
+                    "outcome_sha256": preflight["outcome_sha256"],
+                    "batch_id": preflight.get("batch_id"),
+                    "batch_sha256": preflight.get("batch_sha256"),
+                    "batch_path": preflight.get("batch_path"),
+                },
+            )
+        if preflight_path.exists() and workflow.stage("validate") is None:
+            current_stage = "validate"
+            preflight = load_scheduled_search_outcome(
+                project_root, preflight_relative, run_date=run_date
+            )
+            package_path = (
+                project_root / "data" / "automatic" / "packages" / f"{run_date}.json"
+            )
+            if preflight["status"] == "ready" and package_path.exists():
+                from .automatic import validate_automatic_package
+                from .release import _read_current_pointer
+
+                outcome, batch = load_ready_scheduled_search_batch(
+                    project_root, preflight_relative, run_date=run_date
+                )
+                validation = validate_automatic_package(
+                    project_root,
+                    run_date,
+                    batch_id=str(outcome["batch_id"]),
+                    candidates=batch["candidates"],
+                    checkpoint=_read_current_pointer(project_root),
+                )
+                if validation is not None:
+                    binding = validation.package["candidate"]
+                    selected = workflow.complete_stage(
+                        "select",
+                        {
+                            "batch_sha256": outcome["batch_sha256"],
+                            "candidate_id": binding["candidate_id"],
+                            "candidate_sha256": binding["candidate_sha256"],
+                        },
+                        {
+                            "candidate_id": binding["candidate_id"],
+                            "candidate_sha256": binding["candidate_sha256"],
+                        },
+                    )
+                    materialized = workflow.complete_stage(
+                        "materialize_source",
+                        {
+                            "selection_receipt_sha256": selected["receipt_sha256"],
+                            "pdf_sha256": validation.source["content_sha256"],
+                        },
+                        {
+                            "source_id": validation.source["id"],
+                            "pdf_sha256": validation.source["content_sha256"],
+                            "logical_path": validation.source["relative_path"],
+                        },
+                    )
+                    package_sha = sha256_file(package_path)
+                    authored = workflow.complete_stage(
+                        "author",
+                        {
+                            "materialization_receipt_sha256": materialized[
+                                "receipt_sha256"
+                            ],
+                            "package_sha256": package_sha,
+                        },
+                        {"package_sha256": package_sha},
+                    )
+                    workflow.complete_stage(
+                        "validate",
+                        {
+                            "author_receipt_sha256": authored["receipt_sha256"],
+                            "package_schema_sha256": sha256_file(
+                                project_root / "schemas" / "automatic-pulse-package.schema.json"
+                            ),
+                        },
+                        {
+                            "package_sha256": package_sha,
+                            "source_id": validation.source["id"],
+                            "knowledge_ids": list(validation.pulse_ids),
+                            "artifact_ids": [
+                                item.artifact_id for item in validation.artifact_payloads
+                            ],
+                        },
+                    )
+
+        current_stage = "publish_local"
+        publish_reference = workflow.stage("publish_local")
+        if publish_reference is None:
+            daily_command = [
+                str(python),
+                "scripts/run_daily_pipeline.py",
+                "--project-root",
+                str(project_root),
+                "--mode",
+                "live",
+                "--date",
+                run_date,
+            ]
+            try:
+                os.lstat(preflight_path)
+            except FileNotFoundError:
+                pass
+            else:
+                daily_command.extend(("--external-search-outcome", preflight_relative))
+            completed = _run(
+                runner,
+                project_root,
+                tuple(daily_command),
+                timeout=3600,
+                expected=(0, 2),
+            )
+            daily = _parse_daily_result(project_root, completed)
+            if daily["status"] != "published":
+                if not _clean_worktree(runner, project_root):
+                    raise ScheduledPublishError(
+                        "a non-published daily run left public Git changes; nothing was staged"
+                    )
+                workflow.complete(str(daily["status"]), str(daily["reason"]))
+                return ScheduledRunResult(
+                    status=str(daily["status"]),
+                    date=run_date,
+                    reason=str(daily["reason"]),
+                    daily=daily,
+                    deployment_status="not_requested",
+                )
+            publish_reference = workflow.complete_stage(
+                "publish_local",
+                {
+                    "base_head": workflow_base,
+                    "external_search_outcome": (
+                        preflight_relative
+                        if (project_root / preflight_relative).exists()
+                        else None
+                    ),
+                },
+                {"daily": daily},
+            )
+        else:
+            stored = publish_reference.get("outputs", {}).get("daily")
+            if not isinstance(stored, Mapping):
+                raise ScheduledPublishError("stored local publication result is malformed")
+            daily = dict(stored)
+
+        pulse_path = daily.get("pulse_path") if daily else None
+        pulse_identity = parse_pulse_path(pulse_path) if isinstance(pulse_path, str) else None
+        if daily is None or daily.get("release_advanced") is not True or (
             pulse_identity is None or pulse_identity.date != run_date
         ):
             raise ScheduledPublishError("published daily result is not safe to deploy")
@@ -499,92 +1059,220 @@ def run_scheduled_pipeline(
         _run(
             runner,
             project_root,
-            (
-                str(python),
-                "scripts/export_public_release.py",
-                "--output",
-                str(publication["public_release_directory"]),
-            ),
+            (str(python), "scripts/export_public_release.py", "--output", str(publication["public_release_directory"])),
             timeout=300,
         )
         _run(
             runner,
             project_root,
-            (
-                str(python),
-                "scripts/audit_public_release.py",
-                "--directory",
-                str(publication["public_release_directory"]),
-            ),
+            (str(python), "scripts/audit_public_release.py", "--directory", str(publication["public_release_directory"])),
             timeout=300,
         )
-        current_head = _run(runner, project_root, ("git", "rev-parse", "HEAD")).stdout.strip()
-        if current_head != base_head:
-            raise ScheduledPublishError("HEAD changed during the daily transaction")
-        paths = _validate_publish_changes(
-            _changed_paths(runner, project_root), run_date, pulse_path
-        )
-        _validate_publish_files(project_root, paths)
-        _run(runner, project_root, ("git", "add", "--", *paths))
-        _ensure_only_staged_changes(runner, project_root)
-        staged = _name_status(
+
+        current_stage = "commit"
+        commit_reference = workflow.stage("commit")
+        if commit_reference is None:
+            current_head = _run(runner, project_root, ("git", "rev-parse", "HEAD")).stdout.strip()
+            if current_head == workflow_base:
+                paths = _validate_publish_changes(
+                    _changed_paths(runner, project_root), run_date, str(pulse_path)
+                )
+                _validate_publish_files(project_root, paths)
+                _run(runner, project_root, ("git", "add", "--", *paths))
+                _ensure_only_staged_changes(runner, project_root)
+                staged = _name_status(
+                    _run(
+                        runner,
+                        project_root,
+                        ("git", "diff", "--cached", "--name-status", "--no-renames"),
+                    ).stdout
+                )
+                _validate_publish_changes(staged, run_date, str(pulse_path))
+                _run(runner, project_root, ("git", "diff", "--cached", "--check"))
+                _run(
+                    runner,
+                    project_root,
+                    (
+                        "git",
+                        "commit",
+                        "-m",
+                        f"Publish pulse {PurePosixPath(str(pulse_path)).stem}",
+                    ),
+                    timeout=300,
+                )
+                commit_sha = _run(
+                    runner, project_root, ("git", "rev-parse", "HEAD")
+                ).stdout.strip()
+            else:
+                count = _run(
+                    runner,
+                    project_root,
+                    ("git", "rev-list", "--count", f"{workflow_base}..{current_head}"),
+                ).stdout.strip()
+                if count != "1" or not _clean_worktree(runner, project_root):
+                    raise ScheduledPublishError(
+                        "HEAD changed before the publication commit"
+                    )
+                recovered = _committed_changes(
+                    runner, project_root, workflow_base, current_head
+                )
+                paths = _validate_publish_changes(
+                    recovered, run_date, str(pulse_path)
+                )
+                _validate_publish_files(project_root, paths)
+                commit_sha = current_head
+            if not SHA_RE.fullmatch(commit_sha) or commit_sha == workflow_base:
+                raise ScheduledPublishError("scheduled commit was not created safely")
+            if not _clean_worktree(runner, project_root):
+                raise ScheduledPublishError("worktree is not clean after the scheduled commit")
+            commit_reference = workflow.complete_stage(
+                "commit",
+                {
+                    "publish_receipt_sha256": publish_reference["receipt_sha256"],
+                    "base_head": workflow_base,
+                },
+                {"commit_sha": commit_sha, "base_head": workflow_base},
+            )
+        else:
+            commit_sha = str(commit_reference["outputs"]["commit_sha"])
+
+        current_stage = "push"
+        push_reference = workflow.stage("push")
+        if push_reference is None:
             _run(
                 runner,
                 project_root,
-                ("git", "diff", "--cached", "--name-status", "--no-renames"),
-            ).stdout
-        )
-        _validate_publish_changes(staged, run_date, pulse_path)
-        _run(runner, project_root, ("git", "diff", "--cached", "--check"))
-        _run(
-            runner,
-            project_root,
-            (
-                "git",
-                "commit",
-                "-m",
-                f"Publish pulse {PurePosixPath(pulse_path).stem}",
-            ),
-            timeout=300,
-        )
-        commit_sha = _run(runner, project_root, ("git", "rev-parse", "HEAD")).stdout.strip()
-        if not SHA_RE.fullmatch(commit_sha) or commit_sha == base_head:
-            raise ScheduledPublishError("scheduled commit was not created safely")
-        if not _clean_worktree(runner, project_root):
-            raise ScheduledPublishError("worktree is not clean after the scheduled commit")
-        _run(
-            runner,
-            project_root,
-            ("git", "fetch", "--quiet", str(publication["remote"]), str(publication["branch"])),
-            timeout=180,
-        )
-        upstream = _run(
-            runner,
-            project_root,
-            ("git", "rev-parse", f"refs/remotes/{publication['remote']}/{publication['branch']}"),
-        ).stdout.strip()
-        if upstream != base_head:
-            raise ScheduledPublishError("origin/main changed during the daily transaction")
-        _run(
-            runner,
-            project_root,
-            ("git", "push", str(publication["remote"]), f"{commit_sha}:{publication['branch']}"),
-            timeout=300,
-        )
-        workflow_url, site_url = _deploy(
-            runner, project_root, publication, commit_sha
+                ("git", "fetch", "--quiet", str(publication["remote"]), str(publication["branch"])),
+                timeout=180,
+            )
+            upstream = _run(
+                runner,
+                project_root,
+                ("git", "rev-parse", f"refs/remotes/{publication['remote']}/{publication['branch']}"),
+            ).stdout.strip()
+            head = _run(runner, project_root, ("git", "rev-parse", "HEAD")).stdout.strip()
+            final_commit = head
+            if upstream == head:
+                pass
+            elif upstream != workflow_base:
+                final_commit = _rebase_unpushed_publication(
+                    runner,
+                    project_root,
+                    publication,
+                    base_head=workflow_base,
+                    upstream=upstream,
+                    run_date=run_date,
+                    pulse_path=str(pulse_path),
+                )
+            elif head != commit_sha:
+                raise ScheduledPublishError("local publication commit changed before push")
+            if upstream != final_commit:
+                _run(
+                    runner,
+                    project_root,
+                    ("git", "push", str(publication["remote"]), f"{final_commit}:{publication['branch']}"),
+                    timeout=300,
+                )
+            commit_sha = final_commit
+            push_reference = workflow.complete_stage(
+                "push",
+                {
+                    "commit_receipt_sha256": commit_reference["receipt_sha256"],
+                    "observed_upstream": upstream,
+                },
+                {"commit_sha": commit_sha, "remote": publication["remote"], "branch": publication["branch"]},
+            )
+        else:
+            commit_sha = str(push_reference["outputs"]["commit_sha"])
+
+        current_stage = "verify_deployment"
+        deployment_reference = workflow.stage("verify_deployment")
+        if deployment_reference is None:
+            workflow_url, site_url = _deploy(runner, project_root, publication, commit_sha)
+            deployment_reference = workflow.complete_stage(
+                "verify_deployment",
+                {
+                    "push_receipt_sha256": push_reference["receipt_sha256"],
+                    "commit_sha": commit_sha,
+                },
+                {"commit_sha": commit_sha, "workflow_run_url": workflow_url, "site_url": site_url},
+            )
+        outputs = deployment_reference["outputs"]
+        reason = "reviewed pulse committed, pushed, and deployed through GitHub Pages"
+        workflow.complete(
+            "published",
+            reason,
+            commit_sha=commit_sha,
+            workflow_run_url=outputs["workflow_run_url"],
+            site_url=outputs["site_url"],
         )
         return ScheduledRunResult(
             status="published",
             date=run_date,
-            reason="reviewed pulse committed, pushed, and deployed through GitHub Pages",
+            reason=reason,
             daily=daily,
             deployment_status="deployed",
             commit_sha=commit_sha,
-            workflow_run_url=workflow_url,
-            site_url=site_url,
+            workflow_run_url=str(outputs["workflow_run_url"]),
+            site_url=str(outputs["site_url"]),
+        )
+    except ScheduledRetryableError as exc:
+        if workflow is not None:
+            try:
+                workflow.record_failure(
+                    stage=current_stage,
+                    classification="retryable",
+                    code="transient_command_failure",
+                    reason=str(exc),
+                )
+            except Exception:
+                pass
+        return ScheduledRunResult(
+            status="deferred",
+            date=run_date,
+            reason=str(exc),
+            daily=daily,
+            deployment_status="pending" if daily is not None else "not_requested",
+            commit_sha=commit_sha,
         )
     except Exception as exc:
+        editorial_repair = current_stage in {"author", "validate"}
+        transient_publication = (
+            current_stage in {"push", "verify_deployment"}
+            and isinstance(exc, ScheduledPublishError)
+            and str(exc).startswith("command failed (")
+        )
+        if workflow is not None:
+            try:
+                workflow.record_failure(
+                    stage=current_stage,
+                    classification=(
+                        "deferred"
+                        if editorial_repair
+                        else "retryable" if transient_publication else "terminal"
+                    ),
+                    code=(
+                        "editorial_repair_required"
+                        if editorial_repair
+                        else "transient_publication_failure"
+                        if transient_publication
+                        else "safety_condition_failed"
+                    ),
+                    reason=str(exc),
+                )
+            except Exception:
+                pass
+        if editorial_repair or transient_publication:
+            return ScheduledRunResult(
+                status="review_required" if editorial_repair else "deferred",
+                date=run_date,
+                reason=str(exc),
+                daily=daily,
+                deployment_status=(
+                    "pending" if transient_publication and daily is not None else "not_requested"
+                ),
+                commit_sha=commit_sha,
+            )
         return ScheduledRunResult(
             status="failed" if daily is not None else "blocked",
             date=run_date,

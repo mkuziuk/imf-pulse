@@ -58,6 +58,7 @@ def _package(root: Path) -> tuple[dict, dict]:
         "candidate_sha256": CANDIDATE_SHA,
         "provider": "arxiv",
         "source_type": "preprint",
+        "versioned_external_id": "2607.12345v1",
         "title": "Robust iterative filtering of signals",
         "authors": ["Ada Example"],
         "published_at": "2026-07-20T10:00:00Z",
@@ -292,7 +293,7 @@ def test_automatic_package_preflight_is_read_only(tmp_path: Path) -> None:
     assert not (root / "data" / "automatic" / "extracts").exists()
 
 
-def test_automatic_package_preflight_explains_exact_author_mismatch(
+def test_automatic_package_preflight_derives_exact_candidate_authors(
     tmp_path: Path,
 ) -> None:
     root = _project(tmp_path)
@@ -301,16 +302,47 @@ def test_automatic_package_preflight_explains_exact_author_mismatch(
     package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
     package_path.write_text(json.dumps(package), encoding="utf-8")
 
-    with pytest.raises(
-        PublicationError,
-        match="source authors do not exactly match.*copy the candidate authors verbatim",
-    ):
-        validate_automatic_package(
-            root, DATE, batch_id=BATCH_ID, candidates=[candidate]
-        )
+    validation = validate_automatic_package(
+        root, DATE, batch_id=BATCH_ID, candidates=[candidate]
+    )
 
+    assert validation is not None
+    assert validation.source["authors"] == candidate["authors"]
+    assert validation.source["title"] == candidate["title"]
+    assert validation.source["url"] == candidate["canonical_url"]
     assert not (root / "knowledge" / "curated" / "sources.jsonl").exists()
     assert not (root / "public" / "artifacts").exists()
+
+
+def test_automatic_package_identity_fields_are_code_owned(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    package, candidate = _package(root)
+    for field in (
+        "id",
+        "title",
+        "authors",
+        "date",
+        "source_type",
+        "authority_level",
+        "publication_status",
+        "relative_path",
+        "url",
+        "location",
+        "rights",
+    ):
+        package["source"].pop(field)
+    package_path = root / "data" / "automatic" / "packages" / f"{DATE}.json"
+    package_path.write_text(json.dumps(package), encoding="utf-8")
+
+    validation = validate_automatic_package(
+        root, DATE, batch_id=BATCH_ID, candidates=[candidate]
+    )
+
+    assert validation is not None
+    assert validation.source["id"] == SOURCE_ID
+    assert validation.source["authors"] == candidate["authors"]
+    assert validation.source["relative_path"] == "external/arxiv/2607.12345v1.pdf"
+    assert validation.source["rights"]["reuse_status"] == "internal_only"
 
 
 def test_automatic_package_rejects_source_version_in_accepted_release(
@@ -352,7 +384,7 @@ def test_automatic_generated_image_requires_exact_source_page_brief(
     assert not (root / "public" / "artifacts").exists()
 
 
-@pytest.mark.parametrize("pulse_name", [f"{DATE}.md", f"{DATE}-1.md"])
+@pytest.mark.parametrize("pulse_name", [f"{DATE}.md", f"{DATE}-1.md", f"{DATE}-9.md"])
 def test_consumed_automatic_package_is_ignored_before_schema_validation(
     tmp_path: Path, pulse_name: str,
 ) -> None:

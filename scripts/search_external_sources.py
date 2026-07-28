@@ -12,6 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from research_pipeline.external import (
+    ExternalMetadataRateLimit,
     ExternalMetadataTimeout,
     ExternalMonitoringError,
     run_external_search,
@@ -44,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     config = args.config or project_root / "config" / "external-sources.yaml"
     try:
         result = run_external_search(config, project_root, args.as_of)
-    except ExternalMetadataTimeout as exc:
+    except (ExternalMetadataTimeout, ExternalMetadataRateLimit) as exc:
         if args.scheduled_outcome_date:
             try:
                 outcome_path = write_scheduled_search_outcome(

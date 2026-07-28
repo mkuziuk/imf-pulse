@@ -39,6 +39,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
@@ -58,6 +59,30 @@ class ExternalMonitoringError(RuntimeError):
 
 class ExternalMetadataTimeout(ExternalMonitoringError):
     """A provider did not return metadata within the reviewed time limit."""
+
+
+class ExternalMetadataRateLimit(ExternalMonitoringError):
+    """A provider rate-limited a bounded metadata request."""
+
+    def __init__(self, message: str, *, retry_after_seconds: int | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+def _retry_after_seconds(value: str | None) -> int | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return min(int(value), 24 * 60 * 60)
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    seconds = int((parsed.astimezone(timezone.utc) - datetime.now(timezone.utc)).total_seconds())
+    return max(0, min(seconds, 24 * 60 * 60))
 
 
 ATOM = "http://www.w3.org/2005/Atom"
@@ -589,6 +614,16 @@ def fetch_metadata(
             body = response.read(max_bytes + 1)
     except ExternalMonitoringError:
         raise
+    except urllib.error.HTTPError as exc:
+        if exc.code == 429:
+            retry_after = _retry_after_seconds(exc.headers.get("Retry-After"))
+            raise ExternalMetadataRateLimit(
+                "metadata endpoint returned HTTP 429",
+                retry_after_seconds=retry_after,
+            ) from exc
+        raise ExternalMonitoringError(
+            f"metadata endpoint returned HTTP {exc.code}"
+        ) from exc
     except TimeoutError as exc:
         raise ExternalMetadataTimeout(f"metadata request timed out: {exc}") from exc
     except urllib.error.URLError as exc:
@@ -1284,6 +1319,144 @@ def _write_immutable(
     return directory / filename, True
 
 
+def _query_cache_key(query_id: str, request_url: str, cutoff: datetime) -> str:
+    return canonical_json_hash(
+        {
+            "schema_version": "1.0.0",
+            "query_id": query_id,
+            "request_url": request_url,
+            "as_of": _timestamp(cutoff),
+        }
+    )
+
+
+def _read_regular_bytes(path: Path, maximum_bytes: int) -> bytes:
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        node = os.fstat(descriptor)
+        if not stat.S_ISREG(node.st_mode) or node.st_size > maximum_bytes:
+            raise ExternalMonitoringError("cached metadata receipt is unsafe or oversized")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        payload = b"".join(chunks)
+        if len(payload) != node.st_size:
+            raise ExternalMonitoringError("cached metadata receipt changed while reading")
+        return payload
+    finally:
+        os.close(descriptor)
+
+
+def _load_cached_query(
+    project_root: Path,
+    *,
+    key: str,
+    query_id: str,
+    request_url: str,
+    cutoff: datetime,
+    max_bytes: int,
+) -> FetchedMetadata | None:
+    cache_path = (
+        project_root
+        / "data"
+        / "automatic"
+        / "discovery-query-results"
+        / f"{key}.json"
+    )
+    if not cache_path.exists():
+        return None
+    value = _read_regular_json(cache_path, maximum_bytes=64 * 1024)
+    expected_keys = {
+        "schema_version",
+        "query_id",
+        "request_url",
+        "as_of",
+        "response_sha256",
+        "response_path",
+        "content_type",
+        "content_encoding",
+        "status",
+        "cache_sha256",
+    }
+    if not isinstance(value, Mapping) or set(value) != expected_keys:
+        raise ExternalMonitoringError("cached metadata query result is malformed")
+    identity = {name: value[name] for name in expected_keys if name != "cache_sha256"}
+    if (
+        value.get("schema_version") != "1.0.0"
+        or value.get("query_id") != query_id
+        or value.get("request_url") != request_url
+        or value.get("as_of") != _timestamp(cutoff)
+        or value.get("status") != 200
+        or value.get("cache_sha256") != canonical_json_hash(identity)
+    ):
+        raise ExternalMonitoringError("cached metadata query identity does not match")
+    response_path = value.get("response_path")
+    response_sha = value.get("response_sha256")
+    if (
+        not isinstance(response_path, str)
+        or not re.fullmatch(r"tmp/external-receipts/(?:arxiv|crossref)/[0-9a-f]{64}\.(?:atom|json)", response_path)
+        or not isinstance(response_sha, str)
+        or not SHA256_RE.fullmatch(response_sha)
+    ):
+        raise ExternalMonitoringError("cached metadata receipt binding is invalid")
+    payload = _read_regular_bytes(project_root / response_path, max_bytes)
+    if hashlib.sha256(payload).hexdigest() != response_sha:
+        raise ExternalMonitoringError("cached metadata receipt hash does not match")
+    return FetchedMetadata(
+        payload,
+        str(value["content_type"]),
+        request_url,
+        200,
+        value.get("content_encoding"),
+    )
+
+
+def _store_cached_query(
+    project_root: Path,
+    *,
+    key: str,
+    query: Mapping[str, Any],
+    request_url: str,
+    cutoff: datetime,
+    response: FetchedMetadata,
+    response_sha256: str,
+    private_receipt_root: str,
+) -> str:
+    receipt_root = f"{private_receipt_root}/{query['provider']}"
+    suffix = "atom" if query["provider"] == "arxiv" else "json"
+    receipt_path, _ = _write_immutable(
+        project_root,
+        receipt_root,
+        f"{response_sha256}.{suffix}",
+        response.body,
+        private=True,
+    )
+    relative_receipt = receipt_path.relative_to(project_root).as_posix()
+    cache: dict[str, Any] = {
+        "schema_version": "1.0.0",
+        "query_id": query["id"],
+        "request_url": request_url,
+        "as_of": _timestamp(cutoff),
+        "response_sha256": response_sha256,
+        "response_path": relative_receipt,
+        "content_type": response.content_type,
+        "content_encoding": response.content_encoding,
+        "status": response.status,
+    }
+    cache["cache_sha256"] = canonical_json_hash(cache)
+    _write_immutable(
+        project_root,
+        "data/automatic/discovery-query-results",
+        f"{key}.json",
+        canonical_json_bytes(cache) + b"\n",
+        private=True,
+    )
+    return relative_receipt
+
+
 def _batch_identity_payload(batch: Mapping[str, Any]) -> dict[str, Any]:
     return {
         key: batch[key]
@@ -1432,37 +1605,52 @@ def run_external_search(
     fetch = fetcher or fetch_metadata
     fetched: list[tuple[dict[str, Any], str, FetchedMetadata, str]] = []
     for index, query in enumerate(config["queries"]):
-        if index:
-            sleeper(policy["minimum_request_interval_seconds"])
         request_url = build_metadata_request(config, query, cutoff)
         provider = config["providers"][query["provider"]]
-        try:
-            response_value = fetch(
-                request_url,
-                timeout_seconds=policy["timeout_seconds"],
-                max_bytes=policy["max_response_bytes"],
-                allowed_hosts=policy["allowed_hosts"],
-                media_types=provider["response_media_types"],
-                user_agent=policy["user_agent"],
-            )
-        except ExternalMetadataTimeout as exc:
-            raise ExternalMetadataTimeout(
-                f"{query['provider']} query {query['id']} timed out: {exc}"
-            ) from exc
-        if isinstance(response_value, bytes):
-            response = FetchedMetadata(
-                response_value,
-                (
-                    "application/atom+xml"
-                    if query["provider"] == "arxiv"
-                    else "application/json"
-                ),
-                request_url,
-            )
-        elif isinstance(response_value, FetchedMetadata):
-            response = response_value
-        else:
-            raise ExternalMonitoringError("metadata fetcher returned an invalid response")
+        cache_key = _query_cache_key(str(query["id"]), request_url, cutoff)
+        response = _load_cached_query(
+            project_root,
+            key=cache_key,
+            query_id=str(query["id"]),
+            request_url=request_url,
+            cutoff=cutoff,
+            max_bytes=policy["max_response_bytes"],
+        )
+        if response is None:
+            if index:
+                sleeper(policy["minimum_request_interval_seconds"])
+            try:
+                response_value = fetch(
+                    request_url,
+                    timeout_seconds=policy["timeout_seconds"],
+                    max_bytes=policy["max_response_bytes"],
+                    allowed_hosts=policy["allowed_hosts"],
+                    media_types=provider["response_media_types"],
+                    user_agent=policy["user_agent"],
+                )
+            except ExternalMetadataTimeout as exc:
+                raise ExternalMetadataTimeout(
+                    f"{query['provider']} query {query['id']} timed out: {exc}"
+                ) from exc
+            except ExternalMetadataRateLimit as exc:
+                raise ExternalMetadataRateLimit(
+                    f"{query['provider']} query {query['id']} was rate limited: {exc}",
+                    retry_after_seconds=exc.retry_after_seconds,
+                ) from exc
+            if isinstance(response_value, bytes):
+                response = FetchedMetadata(
+                    response_value,
+                    (
+                        "application/atom+xml"
+                        if query["provider"] == "arxiv"
+                        else "application/json"
+                    ),
+                    request_url,
+                )
+            elif isinstance(response_value, FetchedMetadata):
+                response = response_value
+            else:
+                raise ExternalMonitoringError("metadata fetcher returned an invalid response")
         if response.status != 200 or response.final_url != request_url:
             raise ExternalMonitoringError("metadata fetcher returned an unsafe status or URL")
         if response.content_type not in provider["response_media_types"]:
@@ -1472,6 +1660,16 @@ def run_external_search(
         if not response.body or len(response.body) > policy["max_response_bytes"]:
             raise ExternalMonitoringError("metadata fetcher exceeded the response cap")
         response_sha256 = hashlib.sha256(response.body).hexdigest()
+        _store_cached_query(
+            project_root,
+            key=cache_key,
+            query=query,
+            request_url=request_url,
+            cutoff=cutoff,
+            response=response,
+            response_sha256=response_sha256,
+            private_receipt_root=policy["private_receipt_root"],
+        )
         fetched.append((query, request_url, response, response_sha256))
 
     parsed_candidates: list[dict[str, Any]] = []

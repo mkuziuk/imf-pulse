@@ -12,6 +12,8 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +24,28 @@ from research_pipeline.validation import strict_json_loads
 
 
 MAX_BYTES = 32 * 1024 * 1024
+
+
+class RetryableEvidenceError(RuntimeError):
+    def __init__(self, message: str, *, retry_after_seconds: int | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+def _retry_after_seconds(value: str | None) -> int | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return min(int(value), 24 * 60 * 60)
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    delta = parsed.astimezone(timezone.utc) - datetime.now(timezone.utc)
+    return max(0, min(int(delta.total_seconds()), 24 * 60 * 60))
 
 
 class RejectRedirects(urllib.request.HTTPRedirectHandler):
@@ -70,7 +94,22 @@ def _fetch(url: str) -> bytes:
             if declared is not None and int(declared) > MAX_BYTES:
                 raise RuntimeError("arXiv PDF exceeds the evidence size cap")
             payload = response.read(MAX_BYTES + 1)
-    except (urllib.error.URLError, OSError, ValueError) as exc:
+    except urllib.error.HTTPError as exc:
+        if exc.code == 429:
+            raise RetryableEvidenceError(
+                "arXiv PDF endpoint returned HTTP 429",
+                retry_after_seconds=_retry_after_seconds(exc.headers.get("Retry-After")),
+            ) from exc
+        raise RuntimeError(f"arXiv PDF endpoint returned HTTP {exc.code}") from exc
+    except TimeoutError as exc:
+        raise RetryableEvidenceError(f"arXiv PDF request timed out: {exc}") from exc
+    except urllib.error.URLError as exc:
+        if isinstance(exc.reason, TimeoutError):
+            raise RetryableEvidenceError(
+                f"arXiv PDF request timed out: {exc.reason}"
+            ) from exc
+        raise RuntimeError(f"arXiv PDF request failed: {exc}") from exc
+    except (OSError, ValueError) as exc:
         raise RuntimeError(f"arXiv PDF request failed: {exc}") from exc
     if not payload.startswith(b"%PDF-") or len(payload) > MAX_BYTES:
         raise RuntimeError("arXiv evidence is invalid or oversized")
@@ -116,7 +155,22 @@ def main(argv: list[str] | None = None) -> int:
     versioned = str(candidate["versioned_external_id"])
     quoted = urllib.parse.quote(versioned, safe="/.")
     url = f"https://arxiv.org/pdf/{quoted}"
-    payload = _fetch(url)
+    try:
+        payload = _fetch(url)
+    except RetryableEvidenceError as exc:
+        print(
+            json.dumps(
+                {
+                    "status": "deferred",
+                    "classification": "retryable",
+                    "reason": str(exc),
+                    "retry_after_seconds": exc.retry_after_seconds,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        return 3
     digest = hashlib.sha256(payload).hexdigest()
     output = project_root / "tmp" / "automatic-evidence" / f"{digest}.pdf"
     _install(output, payload)

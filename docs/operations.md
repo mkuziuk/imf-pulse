@@ -182,7 +182,43 @@ DATE="$(TZ=Europe/Moscow date +%F)"
   --date "$DATE"
 ```
 
-The scheduled editor performs metadata search with `--scheduled-outcome-date "$DATE"` and, when justified, prepares and read-only-validates one automatic package before calling the transaction. Mechanical package errors may be repaired against the same immutable inputs before the wrapper starts. That option replaces an ignored `data/automatic/external-search-outcomes/$DATE.json` handoff. A successful handoff binds the exact immutable batch ID and SHA-256; an arXiv or Crossref timeout records a batch-free deferred outcome. The wrapper consumes the handoff instead of issuing a second metadata search. A deferred timeout continues local processing and returns `no_update` when nothing else changed; malformed outcomes and non-timeout search failures remain fail-closed. Do not call synchronization, analysis, rendering, or publication piecemeal around that call. The transaction owns the lock and checkpoint sequence. Unresolved metadata is deferred; only a completely verified package can contribute external evidence.
+The scheduled driver owns a private date-scoped workflow beneath `data/automatic/workflow/scheduled-$DATE/`. Each completed stage has an immutable, hash-bound receipt; the replaceable manifest contains only validated references, the current failure classification, and the earliest valid resume point. Query-level discovery receipts are also installed immediately, so a later timeout or HTTP 429 resumes at the first missing query and observes `Retry-After` without repeating successful provider requests. None of this private state enters Git or `public-release/`.
+
+Use the same driver for operator preparation, selection, status, and unattended resume:
+
+```bash
+.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE" --action prepare
+.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE" --action select --candidate-id CANDIDATE_ID --candidate-sha256 CANDIDATE_SHA256
+.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE" --action status
+.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE"
+```
+
+`prepare` synchronizes a clean stale `main`, performs discovery once, and stops for editorial work. `select` binds one exact still-eligible arXiv candidate before fetching its official PDF; HTTP 429 and read timeout are resumable. The default action advances from the earliest incomplete stage. Legacy `external-search-outcomes/$DATE.json` handoffs and dated packages remain accepted and are imported into the manifest. A consumed package is recognized by any indexed accepted pulse for the date before current-schema validation. Malformed unconsumed packages and all evidence, identity, rights, citation, and publication failures remain fail-closed.
+
+Retryable failures may be invoked again after `retry_not_before`; deferred editorial failures resume after the private package is repaired against the same immutable candidate/PDF. A terminal safety failure does not auto-resume. Preserve its manifest and receipts for diagnosis; reconcile Git or the unsafe input manually, and start a new reviewed run rather than editing a receipt. Before `publish_local`, an operator may abandon the ignored private workflow without affecting accepted history. After `publish_local`, recovery always advances from its receipts—accepted pulses and release pointers are never rolled back or recreated.
+
+The manifest has this compact shape (hashes abbreviated here only for readability; actual values are full SHA-256):
+
+```json
+{
+  "schema_version": "1.0.0",
+  "run_id": "scheduled-2026-07-23",
+  "date": "2026-07-23",
+  "status": "active",
+  "next_stage": "author",
+  "stages": {
+    "discover": {
+      "status": "completed",
+      "input_sha256": "012345...",
+      "receipt": "data/automatic/workflow/scheduled-2026-07-23/stages/02-discover-012345.json",
+      "receipt_sha256": "abcdef...",
+      "outputs": {"batch_id": "external-batch-0123456789abcdef0123"}
+    }
+  },
+  "failure": null,
+  "outcome": null
+}
+```
 
 The command emits one JSON result:
 
@@ -203,9 +239,9 @@ The Codex desktop scheduled task is configured outside the repository with these
 - schedule: daily at 06:00 `Europe/Moscow`;
 - target: `$PROJECT_ROOT`;
 - mode: standalone local run;
-- editorial preparation: search once, read sealed publication context, inspect at most one exact arXiv primary PDF, and create at most one schema-valid automatic package;
-- search handoff: pass `--scheduled-outcome-date "$DATE"`; the wrapper consumes the resulting hash-bound private outcome without repeating provider requests;
-- timeout behavior: a provider read timeout is deferred as `no_update`; validation, identity, rights, and other safety failures still fail closed;
+- editorial preparation: use the scheduled driver `prepare` and `select` actions, read sealed publication context, inspect at most one exact arXiv primary PDF, and create at most one schema-valid automatic package;
+- search handoff: the driver records the exact hash-bound batch and successful query receipts in its private manifest; legacy dated outcomes remain readable;
+- timeout behavior: provider timeout or HTTP 429 is deferred with the prior completed stages preserved; validation, identity, rights, and other safety failures still fail closed;
 - transaction command: `.venv/bin/python scripts/run_scheduled_pipeline.py --project-root "$PROJECT_ROOT" --date "$DATE"` exactly once;
 - output: one concise status summary and the Pages/run links only when deployed;
 - allowed publication action: one non-force commit/push followed by the matching Pages deployment, and only when the daily result is `published` and every wrapper guard passes;
@@ -237,7 +273,7 @@ npm run build
 
 Never force-add ignored private snapshots, releases, receipts, run logs, or build caches. A push to `main` starts `.github/workflows/pages.yml`; an operator can also dispatch it explicitly. The workflow always audits the public boundary, runs frontend tests, builds without source maps, and deploys only `dist/`. It skips the full Python suite only when a fail-closed diff classifier proves that every change is an added or modified approved content file. Code, configuration, workflow, deletion, rename, initial-history, and manual-dispatch cases run the full suite.
 
-The daily research pipeline never runs Git or GitHub commands. The scheduled wrapper owns the narrow publication boundary. Before doing research it requires a clean `main` exactly equal to `origin/main` and authenticated GitHub CLI access. After `published`, it exports and audits `public-release/`, accepts only the current dated pulse/artifacts, five curated knowledge JSONL files, and sealed public export files, then stages those exact regular files. It aborts on deletions, renames, symlinks, unrelated changes, an origin race, failed push, or failed deployment. A failure after commit intentionally leaves the local commit for operator inspection; the next run blocks until local and remote state is reconciled.
+The daily research pipeline never runs Git or GitHub commands. The scheduled driver owns the narrow publication boundary. Before discovery it authenticates and fast-forwards a clean stale `main`. After `published`, it exports and audits `public-release/`, accepts only the current dated pulse/artifacts, five curated knowledge JSONL files, and sealed public export files, then stages those exact regular files. It never force-pushes. If `origin/main` advances before push, the driver rebases only when the remote commits do not touch accepted publication state, revalidates the exact publication diff, and reruns the public audit, Python suite, frontend tests, and production build. Otherwise it stops for manual reconciliation. Commit, push, and deployment verification have separate receipts, so a timeout never recreates an accepted pulse or commit; a later invocation observes the existing commit/workflow and resumes verification.
 
 ## Rights checklist
 

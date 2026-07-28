@@ -29,6 +29,7 @@ from .external_identity import (
 from .hashing import canonical_json_bytes, canonical_json_hash, sha256_file
 from .paths import open_regular_file_under_root
 from .pulse_builder import seal_proposal, validate_proposal
+from .pulse_identity import parse_pulse_path
 from .validation import read_jsonl, strict_json_loads, validate_records
 
 
@@ -236,7 +237,9 @@ def _read_package(path: Path) -> dict[str, Any]:
 def _candidate_for_package(
     package: Mapping[str, Any], batch_id: str | None, candidates: Sequence[Mapping[str, Any]]
 ) -> Mapping[str, Any]:
-    binding = package["candidate"]
+    binding = package.get("candidate")
+    if not isinstance(binding, Mapping):
+        raise PublicationError("automatic package candidate binding is malformed")
     if batch_id is None:
         raise PublicationError("automatic package has no current metadata batch")
     # Provider receipts and therefore batch hashes may change between the
@@ -246,8 +249,8 @@ def _candidate_for_package(
     matches = [
         candidate
         for candidate in candidates
-        if candidate.get("id") == binding["candidate_id"]
-        and candidate.get("candidate_sha256") == binding["candidate_sha256"]
+        if candidate.get("id") == binding.get("candidate_id")
+        and candidate.get("candidate_sha256") == binding.get("candidate_sha256")
     ]
     if len(matches) != 1:
         raise PublicationError("automatic package candidate hash is absent or ambiguous")
@@ -351,13 +354,51 @@ def _extract_pdf(
     return units, semantic_sha, size
 
 
+def _canonical_source(
+    source_value: Any,
+    candidate: Mapping[str, Any],
+    reviewed_rights: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(source_value, Mapping):
+        raise PublicationError("automatic source annotations are malformed")
+    source = dict(source_value)
+    versioned_external_id = candidate.get("versioned_external_id")
+    if isinstance(versioned_external_id, str) and versioned_external_id:
+        logical_suffix = versioned_external_id.replace("/", "-").casefold()
+        identity_suffix = re.sub(r"[^a-z0-9]+", "-", logical_suffix).strip("-")
+        derived_source_id = f"src-external-arxiv-{identity_suffix}"
+        derived_logical_path = f"external/arxiv/{logical_suffix}.pdf"
+        # Legacy packages remain readable, but all new candidate records have
+        # a versioned identity and therefore receive code-derived identifiers.
+        source["id"] = derived_source_id
+        source["relative_path"] = derived_logical_path
+    source["title"] = candidate.get("title")
+    source["authors"] = candidate.get("authors")
+    source["date"] = str(candidate.get("published_at", ""))[:10]
+    source["url"] = candidate.get("canonical_url")
+    source["location"] = candidate.get("canonical_url")
+    source["source_type"] = "preprint"
+    source["authority_level"] = "preprint_unreviewed"
+    source["publication_status"] = "preprint"
+    source["rights"] = (
+        dict(reviewed_rights)
+        if reviewed_rights is not None
+        else {
+            "license": "unknown",
+            "reuse_status": "internal_only",
+            "public_distribution": False,
+        }
+    )
+    return source
+
+
 def _validate_package_semantics(
     project_root: Path,
     package: dict[str, Any],
     candidate: Mapping[str, Any],
     reviewed_rights: Mapping[str, Any] | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
-    source = dict(package["source"])
+    source = _canonical_source(package.get("source"), candidate, reviewed_rights)
     source_id = source.get("id")
     if not isinstance(source_id, str) or not SOURCE_ID_RE.fullmatch(source_id):
         raise PublicationError("automatic source id must use the external arXiv namespace")
@@ -368,33 +409,14 @@ def _validate_package_semantics(
         raise PublicationError("automatic package must identify the approved scheduled model")
     source_rights = source.get("rights", {})
     rights_match = isinstance(source_rights, Mapping) and (
-        (
-            reviewed_rights is None
-            and source_rights.get("reuse_status") in {"internal_only", "unknown"}
-            and source_rights.get("public_distribution") is False
-        )
+        reviewed_rights is None
         or (
-            reviewed_rights is not None
-            and source_rights.get("license") == reviewed_rights.get("license")
-            and source_rights.get("reuse_status")
-            == reviewed_rights.get("reuse_status")
+            source_rights.get("license") == reviewed_rights.get("license")
+            and source_rights.get("reuse_status") == reviewed_rights.get("reuse_status")
             and source_rights.get("public_distribution")
             is reviewed_rights.get("public_distribution")
         )
     )
-    if source.get("title") != candidate.get("title"):
-        raise PublicationError(
-            "automatic source title does not exactly match the arXiv candidate"
-        )
-    if source.get("authors") != candidate.get("authors"):
-        raise PublicationError(
-            "automatic source authors do not exactly match the arXiv candidate; "
-            "copy the candidate authors verbatim"
-        )
-    if source.get("url") != candidate.get("canonical_url"):
-        raise PublicationError(
-            "automatic source URL does not exactly match the arXiv candidate"
-        )
     if (
         source.get("source_type") != "preprint"
         or source.get("authority_level") != "preprint_unreviewed"
@@ -410,9 +432,6 @@ def _validate_package_semantics(
     source_sha = source.get("content_sha256")
     if not isinstance(source_sha, str) or not SHA256_RE.fullmatch(source_sha):
         raise PublicationError("automatic source content hash is invalid")
-    expected_date = str(candidate.get("published_at", ""))[:10]
-    if source.get("date") != expected_date:
-        raise PublicationError("automatic source publication date does not match metadata")
     logical_path = source.get("relative_path")
     if (
         not isinstance(logical_path, str)
@@ -795,17 +814,19 @@ def _package_was_consumed(
 
     if checkpoint is None:
         return False
-    expected_pulses = {
-        f"content/pulses/{run_date}.md",
-        f"content/pulses/{run_date}-1.md",
-    }
     accepted_pulses = checkpoint.get("accepted_pulses")
     accepted_publications = checkpoint.get("accepted_publications")
     if not isinstance(accepted_pulses, list) or not isinstance(
         accepted_publications, list
     ):
         return False
-    recorded = expected_pulses.intersection(accepted_pulses)
+    recorded = {
+        value
+        for value in accepted_pulses
+        if isinstance(value, str)
+        and (identity := parse_pulse_path(value)) is not None
+        and identity.date == run_date
+    }
     return bool(recorded) and any(
         isinstance(publication, Mapping)
         and publication.get("pulse") in recorded
@@ -833,14 +854,18 @@ def validate_automatic_package(
     if not package_path.exists():
         return None
     package = _read_package(package_path)
+    if package.get("date") != run_date:
+        raise PublicationError("automatic editorial package date does not match the run")
+    candidate = _candidate_for_package(package, batch_id, candidates)
+    reviewed_rights = _reviewed_candidate_rights(project_root, candidate)
+    package["source"] = _canonical_source(
+        package.get("source"), candidate, reviewed_rights
+    )
     validate_records(
         [package],
         project_root / "schemas" / "automatic-pulse-package.schema.json",
         "automatic editorial package",
     )
-    if package.get("date") != run_date:
-        raise PublicationError("automatic editorial package date does not match the run")
-    candidate = _candidate_for_package(package, batch_id, candidates)
     candidate_identity = normalize_external_identity(candidate.get("canonical_url"))
     try:
         accepted_identities = accepted_external_identities(project_root, checkpoint)
@@ -850,7 +875,6 @@ def validate_automatic_package(
         raise PublicationError(
             "automatic editorial candidate source version is already accepted"
         )
-    reviewed_rights = _reviewed_candidate_rights(project_root, candidate)
     source, units, _ = _validate_package_semantics(
         project_root, package, candidate, reviewed_rights
     )
