@@ -268,6 +268,8 @@ def test_aegis_handoff_seals_only_exact_approved_evidence(tmp_path: Path) -> Non
         in normalized_instructions
     )
     assert "exactly one citation object per selected source" in normalized_instructions
+    assert "one to three knowledge records total" in normalized_instructions
+    assert "exactly one pulse signal for every knowledge record" in normalized_instructions
     assert (staged_sol / "VISUAL-PLANNING-INSTRUCTIONS.md").is_file()
     assert (
         staged_sol / "schemas" / "automatic-visual-request.schema.json"
