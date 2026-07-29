@@ -23,6 +23,22 @@ from .external import validate_batch_integrity
 MAX_BYTES = 32 * 1024 * 1024
 
 
+class EvidenceFetchError(RuntimeError):
+    """A classified failure while retrieving untrusted external evidence."""
+
+    def __init__(self, reason_code: str, message: str) -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+
+
+class EvidenceUnavailableError(EvidenceFetchError):
+    """The exact candidate cannot supply acceptable primary evidence."""
+
+
+class EvidenceDeferredError(EvidenceFetchError):
+    """The exact candidate may be usable later after a transient failure."""
+
+
 class RejectRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(  # type: ignore[override]
         self,
@@ -33,7 +49,10 @@ class RejectRedirects(urllib.request.HTTPRedirectHandler):
         headers: Any,
         newurl: str,
     ) -> None:
-        raise RuntimeError(f"arXiv PDF redirect is forbidden ({code})")
+        raise EvidenceUnavailableError(
+            "redirect_forbidden",
+            f"arXiv PDF redirect is forbidden ({code})",
+        )
 
 
 def fetch_pdf_bytes(url: str) -> bytes:
@@ -62,19 +81,59 @@ def fetch_pdf_bytes(url: str) -> bytes:
     try:
         with opener.open(request, timeout=30) as response:
             if response.status != 200 or response.geturl() != url:
-                raise RuntimeError("arXiv PDF response changed status or URL")
+                raise EvidenceUnavailableError(
+                    "response_identity_changed",
+                    "arXiv PDF response changed status or URL",
+                )
             if response.headers.get_content_type().lower() != "application/pdf":
-                raise RuntimeError("arXiv evidence response is not a PDF")
+                raise EvidenceUnavailableError(
+                    "not_pdf",
+                    "arXiv evidence response is not a PDF",
+                )
             if response.headers.get("Content-Encoding") not in (None, "", "identity"):
-                raise RuntimeError("compressed arXiv evidence responses are forbidden")
+                raise EvidenceUnavailableError(
+                    "compressed_response",
+                    "compressed arXiv evidence responses are forbidden",
+                )
             declared = response.headers.get("Content-Length")
             if declared is not None and int(declared) > MAX_BYTES:
-                raise RuntimeError("arXiv PDF exceeds the evidence size cap")
+                raise EvidenceUnavailableError(
+                    "oversized",
+                    "arXiv PDF exceeds the evidence size cap",
+                )
             payload = response.read(MAX_BYTES + 1)
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        raise RuntimeError(f"arXiv PDF request failed: {exc}") from exc
+    except EvidenceFetchError:
+        raise
+    except urllib.error.HTTPError as exc:
+        if exc.code in {404, 410}:
+            raise EvidenceUnavailableError(
+                "http_not_found",
+                f"arXiv PDF is unavailable (HTTP {exc.code})",
+            ) from exc
+        if exc.code in {408, 425, 429} or 500 <= exc.code <= 599:
+            raise EvidenceDeferredError(
+                "http_transient",
+                f"arXiv PDF request is temporarily unavailable (HTTP {exc.code})",
+            ) from exc
+        raise EvidenceUnavailableError(
+            "http_rejected",
+            f"arXiv PDF request was rejected (HTTP {exc.code})",
+        ) from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise EvidenceDeferredError(
+            "network_error",
+            f"arXiv PDF request is temporarily unavailable: {exc}",
+        ) from exc
+    except ValueError as exc:
+        raise EvidenceUnavailableError(
+            "invalid_response",
+            f"arXiv PDF response metadata is invalid: {exc}",
+        ) from exc
     if not payload.startswith(b"%PDF-") or len(payload) > MAX_BYTES:
-        raise RuntimeError("arXiv evidence is invalid or oversized")
+        raise EvidenceUnavailableError(
+            "invalid_pdf",
+            "arXiv evidence is invalid or oversized",
+        )
     return payload
 
 

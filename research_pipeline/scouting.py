@@ -141,7 +141,7 @@ def prepare_submission_draft(
                 "cluster_keys": ["unreviewed"],
                 "uncertainties": ["Primary evidence has not been reviewed."],
                 "evidence_availability": (
-                    "official_arxiv_pdf_available"
+                    "metadata_only"
                     if candidate["provider"] == "arxiv"
                     else "full_text_not_allowlisted"
                 ),

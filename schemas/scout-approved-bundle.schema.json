@@ -20,7 +20,7 @@
     "schema_version": {"const": "1.0.0"},
     "edition_date": {"$ref": "common.schema.json#/$defs/calendarDate"},
     "approved_at": {"$ref": "common.schema.json#/$defs/timestamp"},
-    "status": {"enum": ["ready", "no_candidates", "rejected"]},
+    "status": {"enum": ["ready", "no_candidates", "rejected", "deferred"]},
     "audit_input_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
     "audit_verdict_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
     "batch_id": {
@@ -107,6 +107,28 @@
             "type": "string",
             "pattern": "^data/automatic/security/extracts/[a-z0-9-]+\\.jsonl$"
           }
+        },
+        "additionalProperties": false
+      }
+    },
+    "evidence_failures": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "candidate_sha256",
+          "status",
+          "reason_code",
+          "detail"
+        ],
+        "properties": {
+          "candidate_id": {"$ref": "common.schema.json#/$defs/identifier"},
+          "candidate_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+          "status": {"enum": ["unavailable", "deferred"]},
+          "reason_code": {"$ref": "common.schema.json#/$defs/identifier"},
+          "detail": {"type": "string", "minLength": 1, "maxLength": 1000}
         },
         "additionalProperties": false
       }

@@ -13,7 +13,11 @@ from typing import Any, Callable, Mapping, Sequence
 
 from .automatic import _extract_pdf
 from .errors import PublicationError
-from .evidence_fetch import fetch_exact_arxiv_pdf
+from .evidence_fetch import (
+    EvidenceDeferredError,
+    EvidenceUnavailableError,
+    fetch_exact_arxiv_pdf,
+)
 from .external import _batch_identity_payload, validate_batch_integrity
 from .external_preflight import write_scheduled_search_outcome
 from .hashing import canonical_json_bytes, canonical_json_hash, sha256_file
@@ -151,7 +155,7 @@ def _risk_flags(candidate: Mapping[str, Any], card: Mapping[str, Any]) -> list[s
         flags.append("instruction_like_text")
     if candidate.get("provider") != "arxiv":
         flags.append("non_arxiv_provider")
-    if card.get("evidence_availability") != "official_arxiv_pdf_available":
+    if card.get("evidence_availability") == "full_text_not_allowlisted":
         flags.append("full_text_not_allowlisted")
     return flags
 
@@ -377,7 +381,7 @@ def apply_audit_verdict(
         if (
             source["candidate"]["provider"] != "arxiv"
             or source["luna_card"]["evidence_availability"]
-            != "official_arxiv_pdf_available"
+            not in {"metadata_only", "official_arxiv_pdf_available"}
         ):
             raise PublicationError("Aegis approval escaped the arXiv evidence boundary")
         approved_rows.append(
@@ -398,18 +402,36 @@ def apply_audit_verdict(
     approved_rows = approved_rows[:MAX_APPROVED_CANDIDATES]
 
     sealed_candidates: list[dict[str, Any]] = []
+    sealed_rows: list[dict[str, Any]] = []
+    evidence_failures: list[dict[str, Any]] = []
     if approved_rows:
-        batch, batch_relative = _merged_approved_batch(
+        fetch_batch, _fetch_batch_relative = _merged_approved_batch(
             project_root, run_date, approved_rows
         )
         for row in approved_rows:
-            evidence = fetch_exact_arxiv_pdf(
-                project_root,
-                batch,
-                row["candidate"]["id"],
-                row["candidate"]["candidate_sha256"],
-                **({"fetcher": fetcher} if fetcher is not None else {}),
-            )
+            try:
+                evidence = fetch_exact_arxiv_pdf(
+                    project_root,
+                    fetch_batch,
+                    row["candidate"]["id"],
+                    row["candidate"]["candidate_sha256"],
+                    **({"fetcher": fetcher} if fetcher is not None else {}),
+                )
+            except (EvidenceUnavailableError, EvidenceDeferredError) as exc:
+                evidence_failures.append(
+                    {
+                        "candidate_id": row["candidate"]["id"],
+                        "candidate_sha256": row["candidate"]["candidate_sha256"],
+                        "status": (
+                            "deferred"
+                            if isinstance(exc, EvidenceDeferredError)
+                            else "unavailable"
+                        ),
+                        "reason_code": exc.reason_code,
+                        "detail": str(exc),
+                    }
+                )
+                continue
             source_id = (
                 "src-external-arxiv-"
                 + str(row["candidate"]["versioned_external_id"])
@@ -449,17 +471,44 @@ def apply_audit_verdict(
                     "extract_path": extract_relative,
                 }
             )
-        status = "ready"
-        batch_id: str | None = batch["id"]
-        batch_sha: str | None = batch["batch_sha256"]
-        write_scheduled_search_outcome(
-            project_root,
-            run_date=run_date,
-            as_of=f"{run_date}T06:00:00+03:00",
-            status="ready",
-            reason="Aegis approved a hash-bound, statically parsed arXiv evidence bundle",
-            search_result={"batch_id": batch_id, "batch_path": batch_relative},
-        )
+            sealed_rows.append(row)
+        if sealed_rows:
+            batch, batch_relative = _merged_approved_batch(
+                project_root, run_date, sealed_rows
+            )
+            status = "ready"
+            batch_id: str | None = batch["id"]
+            batch_sha: str | None = batch["batch_sha256"]
+            write_scheduled_search_outcome(
+                project_root,
+                run_date=run_date,
+                as_of=f"{run_date}T06:00:00+03:00",
+                status="ready",
+                reason=(
+                    "Aegis approved a hash-bound, statically parsed arXiv "
+                    "evidence bundle"
+                ),
+                search_result={"batch_id": batch_id, "batch_path": batch_relative},
+            )
+        else:
+            status = (
+                "deferred"
+                if any(row["status"] == "deferred" for row in evidence_failures)
+                else "rejected"
+            )
+            batch_id = None
+            batch_sha = None
+            batch_relative = None
+            write_scheduled_search_outcome(
+                project_root,
+                run_date=run_date,
+                as_of=f"{run_date}T06:00:00+03:00",
+                status="deferred",
+                reason=(
+                    "No Aegis-approved candidate supplied acceptable primary "
+                    "evidence"
+                ),
+            )
     else:
         status = "no_candidates" if audit_input["status"] == "no_candidates" else "rejected"
         batch_id = None
@@ -484,6 +533,7 @@ def apply_audit_verdict(
         "batch_sha256": batch_sha,
         "batch_path": batch_relative,
         "candidates": sealed_candidates,
+        "evidence_failures": evidence_failures,
     }
     bundle["bundle_sha256"] = canonical_json_hash(bundle)
     validate_records(
