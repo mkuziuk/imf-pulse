@@ -16,6 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from research_pipeline.errors import PipelineError  # noqa: E402
 from research_pipeline.scout_security import (  # noqa: E402
     apply_audit_verdict,
+    generate_sol_visual,
     import_sol_package,
     stage_audit_input,
     stage_sol_workspace,
@@ -28,12 +29,22 @@ def _now() -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("stage-audit", "apply-audit", "stage-sol", "import-sol"))
+    parser.add_argument(
+        "command",
+        choices=(
+            "stage-audit",
+            "apply-audit",
+            "stage-sol",
+            "generate-visual",
+            "import-sol",
+        ),
+    )
     parser.add_argument("--project-root", type=Path, default=PROJECT_ROOT)
     parser.add_argument("--date", required=True)
     parser.add_argument("--auditor-workspace", type=Path)
     parser.add_argument("--sol-workspace", type=Path)
     parser.add_argument("--timestamp", default=None)
+    parser.add_argument("--attempt", type=int, default=1)
     args = parser.parse_args(argv)
     try:
         project_root = args.project_root.resolve(strict=True)
@@ -63,6 +74,17 @@ def main(argv: list[str] | None = None) -> int:
                 project_root,
                 run_date=args.date,
                 sol_workspace=args.sol_workspace.resolve(),
+                attempt=args.attempt,
+            )
+        elif args.command == "generate-visual":
+            if args.sol_workspace is None:
+                parser.error("generate-visual requires --sol-workspace")
+            path = generate_sol_visual(
+                project_root,
+                run_date=args.date,
+                generated_at=timestamp,
+                sol_workspace=args.sol_workspace.resolve(),
+                attempt=args.attempt,
             )
         else:
             if args.sol_workspace is None:
@@ -71,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
                 project_root,
                 run_date=args.date,
                 sol_workspace=args.sol_workspace.resolve(),
+                attempt=args.attempt,
             )
     except (PipelineError, OSError, RuntimeError, ValueError) as exc:
         print(json.dumps({"status": "failed", "error": str(exc)}, sort_keys=True))

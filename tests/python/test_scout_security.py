@@ -16,6 +16,7 @@ from research_pipeline.errors import PublicationError
 from research_pipeline.hashing import canonical_json_hash
 from research_pipeline.scout_security import (
     apply_audit_verdict,
+    generate_sol_visual,
     load_approved_bundle,
     stage_audit_input,
     stage_sol_workspace,
@@ -39,6 +40,10 @@ def _project(tmp_path: Path) -> Path:
     (root / "prompts").mkdir()
     shutil.copy2(
         PROJECT / "prompts" / "automatic-editor-offline.md",
+        root / "prompts",
+    )
+    shutil.copy2(
+        PROJECT / "prompts" / "automatic-visual-planner-offline.md",
         root / "prompts",
     )
     return root
@@ -242,12 +247,87 @@ def test_aegis_handoff_seals_only_exact_approved_evidence(tmp_path: Path) -> Non
         root,
         run_date=DATE,
         sol_workspace=sol_workspace,
+        attempt=2,
     )
     assert json.loads((staged_sol / "bundle.json").read_text()) == bundle
-    assert (staged_sol / "EDITORIAL-INSTRUCTIONS.md").is_file()
+    instructions = (staged_sol / "EDITORIAL-INSTRUCTIONS.md").read_text()
+    normalized_instructions = " ".join(instructions.split())
+    assert "unknown media-reuse rights may still support" in normalized_instructions
+    assert (
+        "Rights uncertainty forbids republication of source media"
+        in normalized_instructions
+    )
+    assert (
+        "host-generated conceptual image"
+        in normalized_instructions
+    )
+    assert "Do not use a diagram" in normalized_instructions
+    assert (staged_sol / "VISUAL-PLANNING-INSTRUCTIONS.md").is_file()
+    assert (
+        staged_sol / "schemas" / "automatic-visual-request.schema.json"
+    ).is_file()
     assert (staged_sol / "schemas" / "automatic-pulse-package.schema.json").is_file()
     assert len(list((staged_sol / "extracts").glob("*.jsonl"))) == 1
     assert list(staged_sol.rglob("*.pdf")) == []
+
+    selected = bundle["candidates"][0]
+    candidate = selected["candidate"]
+    evidence = selected["evidence"]
+    source_id = (
+        "src-external-arxiv-"
+        + candidate["versioned_external_id"].lower().replace(".", "-")
+    )
+    request = {
+        "schema_version": "1.0.0",
+        "date": DATE,
+        "candidate_id": candidate["id"],
+        "candidate_sha256": candidate["candidate_sha256"],
+        "source_reference": {
+            "source_id": source_id,
+            "source_sha256": evidence["content_sha256"],
+            "locator": {
+                "kind": "pdf",
+                "path": evidence["logical_path"],
+                "page": 1,
+            },
+        },
+        "slug": "robust-local-estimation",
+        "title": "A generated robust-estimation landscape",
+        "caption": (
+            "Synthetic scientific landscape. "
+            "Conceptual illustration — not research evidence"
+        ),
+        "relation_to_report": "Explains the qualitative estimation setting.",
+        "limitations": ["Synthetic geometry; no paper values are reproduced."],
+        "prompt": (
+            "Create an original scientific editorial raster illustration of "
+            "local robust estimation under changing observations. "
+            "Conceptual illustration — not research evidence"
+        ),
+    }
+    request_path = (
+        sol_workspace
+        / "outbox"
+        / DATE
+        / "attempt-2-visual-request.json"
+    )
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    visual_path = generate_sol_visual(
+        root,
+        run_date=DATE,
+        generated_at="2026-07-29T06:01:00+03:00",
+        sol_workspace=sol_workspace,
+        attempt=2,
+        generator=lambda prompt: (
+            b"\x89PNG\r\n\x1a\nfixture"
+            if "Do not create a diagram" in prompt
+            else b""
+        ),
+    )
+    visual = json.loads(visual_path.read_text())
+    assert visual["kind"] == "generated_image"
+    assert visual["generation"]["model"] == "openai/gpt-image-2"
+    assert visual["source_path"].startswith("tmp/automatic-visuals/")
 
 
 def test_aegis_cannot_override_deterministic_prompt_injection_flag(

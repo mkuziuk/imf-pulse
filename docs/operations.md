@@ -255,4 +255,10 @@ Before any artifact enters `public-release/`, confirm:
 - creator, original URL, retrieval date, and reuse terms for web images;
 - the exact visible label `Conceptual illustration — not research evidence` for generated images.
 
-Unknown-rights source figures, PDF pages, and screenshots remain private. The repository itself intentionally has no open-source license unless the owner adds one.
+Unknown-rights source figures, PDF pages, and screenshots remain private.
+Unknown source-media rights do not block original analysis or citation of the
+paper. They require the editor to omit the source media and, when a visual is
+warranted, substitute a ChatGPT-generated raster conceptual illustration whose
+protected pixels, numerical samples, labels, color map, and composition are not
+copied. Scheduled automatic reports do not use diagrams. The repository itself
+intentionally has no open-source license unless the owner adds one.

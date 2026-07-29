@@ -156,7 +156,7 @@ A push to `main` or an explicit dispatch of `.github/workflows/pages.yml` re-aud
 
 ## Artifact and rights policy
 
-Scientific charts include normalized data, a declarative specification, and a deterministic rendering. Web images require recorded creator, origin, retrieval date, caption, relevance, and cleared reuse rights. Existing source figures and draft-page images remain private because no reuse permission was found.
+Scientific charts include normalized data, a declarative specification, and a deterministic rendering. Web images require recorded creator, origin, retrieval date, caption, relevance, and cleared reuse rights. Existing source figures and draft-page images remain private because no reuse permission was found. Unknown source-media rights do not prevent an original, cited report; they prevent republication of that media. The automatic editor must omit it and use a ChatGPT-generated raster surrogate with original visual form when a replacement visual is warranted. Scheduled automatic reports do not use diagrams.
 
 Generated images are optional conceptual aids. They must display:
 

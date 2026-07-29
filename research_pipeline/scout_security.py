@@ -7,6 +7,8 @@ import os
 import re
 import shutil
 import stat
+import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -27,6 +29,8 @@ from .validation import strict_json_loads, validate_records
 AUDIT_INPUT_SCHEMA = "scout-audit-input.schema.json"
 AUDIT_VERDICT_SCHEMA = "scout-audit-verdict.schema.json"
 APPROVED_BUNDLE_SCHEMA = "scout-approved-bundle.schema.json"
+VISUAL_REQUEST_SCHEMA = "automatic-visual-request.schema.json"
+GENERATED_IMAGE_LABEL = "Conceptual illustration — not research evidence"
 MAX_AUDIT_CANDIDATES = 12
 MAX_APPROVED_CANDIDATES = 6
 INSTRUCTION_PATTERN = re.compile(
@@ -37,6 +41,31 @@ INSTRUCTION_PATTERN = re.compile(
 
 def approved_bundle_path(run_date: str) -> str:
     return f"data/automatic/security/approved/{run_date}.json"
+
+
+def _attempt_name(attempt: int) -> str:
+    if not isinstance(attempt, int) or isinstance(attempt, bool) or attempt < 1:
+        raise PublicationError("Sol attempt must be a positive integer")
+    return f"attempt-{attempt}"
+
+
+def _sol_attempt_inbox(sol_workspace: Path, run_date: str, attempt: int) -> Path:
+    return sol_workspace / "inbox" / run_date / _attempt_name(attempt)
+
+
+def _sol_visual_request(
+    sol_workspace: Path, run_date: str, attempt: int
+) -> Path:
+    return (
+        sol_workspace
+        / "outbox"
+        / run_date
+        / f"{_attempt_name(attempt)}-visual-request.json"
+    )
+
+
+def _sol_package(sol_workspace: Path, run_date: str, attempt: int) -> Path:
+    return sol_workspace / "outbox" / run_date / f"{_attempt_name(attempt)}.json"
 
 
 def _parse_timestamp(value: str) -> str:
@@ -112,6 +141,25 @@ def _write_jsonl_immutable(path: Path, rows: Sequence[Mapping[str, Any]]) -> Pat
     except FileExistsError:
         if path.is_symlink() or not path.is_file() or path.read_bytes() != payload:
             raise PublicationError(f"immutable security extract conflicts: {path}")
+        return path
+    try:
+        offset = 0
+        while offset < len(payload):
+            offset += os.write(descriptor, payload[offset:])
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    return path
+
+
+def _write_bytes_immutable(path: Path, payload: bytes) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except FileExistsError:
+        if path.is_symlink() or not path.is_file() or path.read_bytes() != payload:
+            raise PublicationError(f"immutable generated visual conflicts: {path}")
         return path
     try:
         offset = 0
@@ -593,16 +641,18 @@ def stage_sol_workspace(
     *,
     run_date: str,
     sol_workspace: Path,
+    attempt: int = 1,
 ) -> Path:
     """Copy only approved data, schemas, and editorial instructions to Sol."""
 
     bundle = load_approved_bundle(project_root, run_date)
     if bundle["status"] != "ready":
         raise PublicationError("Sol staging requires a ready Aegis bundle")
-    destination = sol_workspace / "inbox" / run_date
+    destination = _sol_attempt_inbox(sol_workspace, run_date, attempt)
     if destination.exists():
         raise PublicationError("Sol inbox already exists; refusing to replace staged input")
     destination.mkdir(parents=True)
+    (sol_workspace / "outbox" / run_date).mkdir(parents=True, exist_ok=True)
     (destination / "bundle.json").write_bytes(canonical_json_bytes(bundle) + b"\n")
     extracts = destination / "extracts"
     extracts.mkdir()
@@ -613,10 +663,165 @@ def stage_sol_workspace(
         shutil.copyfile(source, extracts / source.name)
     shutil.copytree(project_root / "schemas", destination / "schemas")
     shutil.copyfile(
+        project_root / "prompts" / "automatic-visual-planner-offline.md",
+        destination / "VISUAL-PLANNING-INSTRUCTIONS.md",
+    )
+    shutil.copyfile(
         project_root / "prompts" / "automatic-editor-offline.md",
         destination / "EDITORIAL-INSTRUCTIONS.md",
     )
     return destination
+
+
+def _default_chatgpt_image_generator(prompt: str) -> bytes:
+    executable = shutil.which("openclaw")
+    if executable is None:
+        raise PublicationError("OpenClaw image-generation CLI is unavailable")
+    with tempfile.TemporaryDirectory(prefix="residual-image-") as temporary:
+        output = Path(temporary) / "generated.png"
+        command = [
+            executable,
+            "infer",
+            "image",
+            "generate",
+            "--model",
+            "openai/gpt-image-2",
+            "--quality",
+            "high",
+            "--size",
+            "1536x1024",
+            "--output-format",
+            "png",
+            "--output",
+            str(output),
+            "--timeout-ms",
+            "300000",
+            "--prompt",
+            prompt,
+            "--json",
+        ]
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=330,
+        )
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout).strip()
+            raise PublicationError(
+                f"ChatGPT image generation failed: {detail or completed.returncode}"
+            )
+        if not output.is_file():
+            raise PublicationError("ChatGPT image generation produced no image file")
+        return output.read_bytes()
+
+
+def generate_sol_visual(
+    project_root: Path,
+    *,
+    run_date: str,
+    generated_at: str,
+    sol_workspace: Path,
+    attempt: int = 1,
+    generator: Callable[[str], bytes] | None = None,
+) -> Path:
+    """Generate and seal one ChatGPT raster visual from Sol's bounded brief."""
+
+    generated_at = _parse_timestamp(generated_at)
+    request = _read_json(
+        _sol_visual_request(sol_workspace, run_date, attempt),
+        "offline Sol visual request",
+        maximum=64 * 1024,
+    )
+    validate_records(
+        [request],
+        project_root / "schemas" / VISUAL_REQUEST_SCHEMA,
+        "offline Sol visual request",
+    )
+    if request.get("date") != run_date:
+        raise PublicationError("offline Sol visual request date does not match")
+    bundle = load_approved_bundle(project_root, run_date)
+    matches = [
+        row
+        for row in bundle.get("candidates", [])
+        if row["candidate"]["id"] == request["candidate_id"]
+        and row["candidate"]["candidate_sha256"] == request["candidate_sha256"]
+    ]
+    if bundle.get("status") != "ready" or len(matches) != 1:
+        raise PublicationError("offline Sol visual request escaped Aegis authority")
+    selected = matches[0]
+    candidate = selected["candidate"]
+    evidence = selected["evidence"]
+    expected_source_id = (
+        "src-external-arxiv-"
+        + str(candidate["versioned_external_id"])
+        .lower()
+        .replace("/", "-")
+        .replace(".", "-")
+    )
+    reference = request["source_reference"]
+    locator = reference["locator"]
+    if (
+        reference["source_id"] != expected_source_id
+        or reference["source_sha256"] != evidence["content_sha256"]
+        or locator.get("kind") != "pdf"
+        or locator.get("path") != evidence["logical_path"]
+        or not isinstance(locator.get("page"), int)
+        or not 1 <= locator["page"] <= evidence["page_count"]
+    ):
+        raise PublicationError(
+            "offline Sol visual request lacks an exact approved source page"
+        )
+    prompt = (
+        request["prompt"].strip()
+        + "\n\nCreate a polished raster scientific editorial illustration with an "
+        "original visual composition. Do not reproduce, crop, trace, or imitate "
+        "any source figure, screenshot, panel layout, numerical samples, labels, "
+        "color map, or protected pixels. Use synthetic geometry and qualitative "
+        "relationships only. Do not create a diagram, chart, flowchart, or data "
+        f"plot. Render this exact visible label clearly: {GENERATED_IMAGE_LABEL}"
+    )
+    request_sha = canonical_json_hash(request)
+    relative = (
+        f"tmp/automatic-visuals/{run_date}-{request['slug']}-"
+        f"{request_sha[:12]}.png"
+    )
+    image_path = project_root / relative
+    if image_path.exists():
+        payload = image_path.read_bytes()
+    else:
+        payload = (generator or _default_chatgpt_image_generator)(prompt)
+        _write_bytes_immutable(image_path, payload)
+    if (
+        not 8 <= len(payload) <= 20 * 1024 * 1024
+        or not payload.startswith(b"\x89PNG\r\n\x1a\n")
+    ):
+        raise PublicationError("ChatGPT generated visual is not a bounded PNG")
+    artifact = {
+        "kind": "generated_image",
+        "slug": request["slug"],
+        "title": request["title"],
+        "caption": request["caption"],
+        "relation_to_report": request["relation_to_report"],
+        "limitations": request["limitations"],
+        "source_path": relative,
+        "sha256": sha256_file(image_path),
+        "media_type": "image/png",
+        "generation": {
+            "model": "openai/gpt-image-2",
+            "prompt": prompt,
+            "generated_at": generated_at,
+            "source_reference": reference,
+            "reproduction_policy": (
+                "scientific-content-faithful_visual-form-original"
+            ),
+        },
+    }
+    destination = _sol_attempt_inbox(
+        sol_workspace, run_date, attempt
+    ) / "GENERATED-VISUAL.json"
+    return _write_immutable(destination, artifact)
 
 
 def import_sol_package(
@@ -624,10 +829,11 @@ def import_sol_package(
     *,
     run_date: str,
     sol_workspace: Path,
+    attempt: int = 1,
 ) -> Path:
     """Validate and immutably import Sol's offline package for the publisher."""
 
-    package_path = sol_workspace / "outbox" / f"{run_date}.json"
+    package_path = _sol_package(sol_workspace, run_date, attempt)
     package = _read_json(package_path, "offline Sol package", maximum=2 * 1024 * 1024)
     validate_records(
         [package],
@@ -636,6 +842,16 @@ def import_sol_package(
     )
     if package.get("date") != run_date:
         raise PublicationError("offline Sol package date does not match")
+    visual = _read_json(
+        _sol_attempt_inbox(sol_workspace, run_date, attempt)
+        / "GENERATED-VISUAL.json",
+        "host-generated visual manifest",
+        maximum=64 * 1024,
+    )
+    if package.get("artifacts") != [visual] or visual.get("kind") != "generated_image":
+        raise PublicationError(
+            "offline Sol package must use the exact host-generated raster visual"
+        )
     bundle = load_approved_bundle(project_root, run_date)
     if bundle["status"] != "ready" or package.get("candidates") is None:
         raise PublicationError("offline Sol package has no ready Aegis authority")

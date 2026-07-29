@@ -16,6 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from research_pipeline.errors import PipelineError  # noqa: E402
 from research_pipeline.scout_security import (  # noqa: E402
     apply_audit_verdict,
+    generate_sol_visual,
     import_sol_package,
     load_approved_bundle,
     stage_audit_input,
@@ -46,15 +47,30 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "step",
-        choices=("freeze", "stage-audit", "apply-audit", "stage-sol", "publish"),
+        choices=(
+            "freeze",
+            "stage-audit",
+            "apply-audit",
+            "stage-sol",
+            "generate-visual",
+            "publish",
+        ),
     )
     parser.add_argument("--project-root", type=Path, default=PROJECT_ROOT)
     parser.add_argument(
         "--run-date",
         help="Europe/Moscow edition date (YYYY-MM-DD); defaults to today",
     )
+    parser.add_argument(
+        "--attempt",
+        type=int,
+        default=1,
+        help="positive TaskFlow attempt number for Sol staging and publication",
+    )
     args = parser.parse_args(argv)
     try:
+        if args.attempt < 1:
+            raise ValueError("attempt must be a positive integer")
         run_date, timestamp = _clock(args.run_date)
         project_root = args.project_root.resolve(strict=True)
         if args.step == "freeze":
@@ -90,16 +106,44 @@ def main(argv: list[str] | None = None) -> int:
                     project_root,
                     run_date=run_date,
                     sol_workspace=SOL_WORKSPACE,
+                    attempt=args.attempt,
                 )
                 result = {"status": "sol_staged", "path": str(path)}
+        elif args.step == "generate-visual":
+            request = (
+                SOL_WORKSPACE
+                / "outbox"
+                / run_date
+                / f"attempt-{args.attempt}-visual-request.json"
+            )
+            if not request.is_file():
+                result = {
+                    "status": "no_update",
+                    "reason": "Sol produced no defensible visual request",
+                }
+            else:
+                path = generate_sol_visual(
+                    project_root,
+                    run_date=run_date,
+                    generated_at=timestamp,
+                    sol_workspace=SOL_WORKSPACE,
+                    attempt=args.attempt,
+                )
+                result = {"status": "visual_generated", "path": str(path)}
         else:
             bundle = load_approved_bundle(project_root, run_date)
-            outbox = SOL_WORKSPACE / "outbox" / f"{run_date}.json"
+            outbox = (
+                SOL_WORKSPACE
+                / "outbox"
+                / run_date
+                / f"attempt-{args.attempt}.json"
+            )
             if bundle["status"] == "ready" and outbox.is_file():
                 import_sol_package(
                     project_root,
                     run_date=run_date,
                     sol_workspace=SOL_WORKSPACE,
+                    attempt=args.attempt,
                 )
             publication = run_scheduled_pipeline(project_root, run_date=run_date)
             result = publication.as_dict()
