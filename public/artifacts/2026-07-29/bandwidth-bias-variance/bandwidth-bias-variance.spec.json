@@ -1,0 +1,20 @@
+{
+  "chart_type": "line",
+  "derivation": {
+    "normalized_bandwidth": "x = h / h0",
+    "normalized_squared_bias": "x^4 / 5",
+    "normalized_total_loss": "4 / (5x) + x^4 / 5",
+    "normalized_variance": "4 / (5x)"
+  },
+  "schema_version": 1,
+  "source": {
+    "equations": [
+      20,
+      21
+    ],
+    "pdf_pages": [
+      9
+    ],
+    "source_id": "src-external-arxiv-1705-10046v1"
+  }
+}

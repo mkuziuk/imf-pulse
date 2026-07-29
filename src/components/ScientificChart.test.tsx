@@ -54,6 +54,8 @@ describe("ScientificChart", () => {
       "src",
       "/artifacts/2026-07-22/chart.svg"
     );
+    expect(screen.queryByLabelText("Chart series")).not.toBeInTheDocument();
+    expect(screen.queryByText("Exact values and accessible data table")).not.toBeInTheDocument();
   });
 
   it("uses a unique caption relationship for each chart", () => {

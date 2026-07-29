@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title description">
+  <title id="title">A narrower fraction can still contain more observations</title>
+  <desc id="description">A normalized log-scale line plot showing that under h proportional to n to the minus one fifth, the bandwidth fraction declines while the number of observations in the local window grows as n to the four fifths.</desc>
+  <rect width="1200" height="720" fill="#f3efe4"/>
+  <style>
+    text { font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; }
+    .series { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <text x="112.00" y="48.00" fill="#161a19" font-size="30" font-weight="650" text-anchor="start">A narrower fraction can still contain more observations</text>
+  <text x="112.00" y="82.00" fill="#626862" font-size="17" font-weight="400" text-anchor="start">Algebraic implication of h₀ ∝ n⁻¹ᐟ⁵, holding problem-specific constants fixed</text>
+  <line x1="112" x2="1146" y1="602.05" y2="602.05" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="96.00" y="608.05" fill="#626862" font-size="15" font-weight="400" text-anchor="end">0.5×</text>
+  <line x1="112" x2="1146" y1="521.46" y2="521.46" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="96.00" y="527.46" fill="#626862" font-size="15" font-weight="400" text-anchor="end">1×</text>
+  <line x1="112" x2="1146" y1="440.87" y2="440.87" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="96.00" y="446.87" fill="#626862" font-size="15" font-weight="400" text-anchor="end">2×</text>
+  <line x1="112" x2="1146" y1="334.33" y2="334.33" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="96.00" y="340.33" fill="#626862" font-size="15" font-weight="400" text-anchor="end">5×</text>
+  <line x1="112" x2="1146" y1="253.74" y2="253.74" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="96.00" y="259.74" fill="#626862" font-size="15" font-weight="400" text-anchor="end">10×</text>
+  <line x1="112" x2="1146" y1="173.14" y2="173.14" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="96.00" y="179.14" fill="#626862" font-size="15" font-weight="400" text-anchor="end">20×</text>
+  <line x1="112.00" x2="112.00" y1="126" y2="628" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="112.00" y="656.00" fill="#626862" font-size="15" font-weight="400" text-anchor="middle">200</text>
+  <line x1="354.19" x2="354.19" y1="126" y2="628" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="354.19" y="656.00" fill="#626862" font-size="15" font-weight="400" text-anchor="middle">500</text>
+  <line x1="537.40" x2="537.40" y1="126" y2="628" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="537.40" y="656.00" fill="#626862" font-size="15" font-weight="400" text-anchor="middle">1,000</text>
+  <line x1="720.60" x2="720.60" y1="126" y2="628" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="720.60" y="656.00" fill="#626862" font-size="15" font-weight="400" text-anchor="middle">2,000</text>
+  <line x1="962.79" x2="962.79" y1="126" y2="628" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="962.79" y="656.00" fill="#626862" font-size="15" font-weight="400" text-anchor="middle">5,000</text>
+  <line x1="1146.00" x2="1146.00" y1="126" y2="628" stroke="#d6d0c2" stroke-width="1"/>
+  <text x="1146.00" y="656.00" fill="#626862" font-size="15" font-weight="400" text-anchor="middle">10,000</text>
+  <line x1="112" x2="1146" y1="628" y2="628" stroke="#161a19" stroke-width="1.5"/>
+  <line x1="112" x2="112" y1="126" y2="628" stroke="#161a19" stroke-width="1.5"/>
+  <text x="629.00" y="692.00" fill="#161a19" font-size="18" font-weight="400" text-anchor="middle">Sample size n (log scale)</text>
+  <text x="30.00" y="377.00" fill="#161a19" font-size="18" font-weight="400" text-anchor="middle" transform="rotate(-90 30.00 377.00)">Relative to n = 200 (log scale)</text>
+  <path class="series" d="M 112.00 521.46 L 122.37 522.37 L 132.34 523.25 L 143.13 524.20 L 153.50 525.11 L 163.47 525.99 L 174.13 526.93 L 184.38 527.83 L 194.24 528.70 L 204.68 529.62 L 215.62 530.58 L 226.13 531.50 L 236.23 532.39 L 246.75 533.32 L 256.88 534.21 L 267.36 535.13 L 277.44 536.02 L 287.84 536.93 L 297.84 537.81 L 308.73 538.77 L 318.59 539.64 L 329.26 540.58 L 339.52 541.48 L 349.92 542.39 L 354.19 542.77 L 359.94 543.28 L 370.58 544.21 L 380.82 545.11 L 391.13 546.02 L 401.50 546.93 L 411.90 547.85 L 422.31 548.76 L 432.73 549.68 L 442.74 550.56 L 453.13 551.47 L 463.46 552.38 L 473.75 553.29 L 484.30 554.22 L 494.44 555.11 L 504.81 556.02 L 515.36 556.95 L 525.50 557.84 L 536.07 558.77 L 537.40 558.89 L 546.23 559.67 L 556.51 560.57 L 566.88 561.48 L 577.31 562.40 L 587.56 563.30 L 598.06 564.23 L 608.36 565.13 L 618.67 566.04 L 628.96 566.94 L 639.41 567.86 L 649.63 568.76 L 659.97 569.67 L 670.40 570.59 L 680.74 571.50 L 690.99 572.40 L 701.42 573.32 L 711.73 574.23 L 720.60 575.01 L 722.05 575.13 L 732.36 576.04 L 742.78 576.96 L 753.02 577.86 L 763.45 578.78 L 773.81 579.69 L 784.09 580.59 L 794.49 581.51 L 804.78 582.41 L 815.14 583.32 L 825.47 584.23 L 835.76 585.14 L 846.15 586.05 L 856.47 586.96 L 866.85 587.87 L 877.14 588.78 L 887.53 589.69 L 897.86 590.60 L 908.20 591.51 L 918.53 592.42 L 928.88 593.33 L 939.20 594.24 L 949.51 595.15 L 959.87 596.06 L 962.79 596.31 L 970.25 596.97 L 980.58 597.88 L 990.90 598.79 L 1001.25 599.70 L 1011.60 600.61 L 1021.94 601.52 L 1032.26 602.43 L 1042.58 603.33 L 1052.93 604.24 L 1063.29 605.16 L 1073.64 606.07 L 1083.96 606.97 L 1094.29 607.88 L 1104.63 608.79 L 1114.99 609.70 L 1125.31 610.61 L 1135.65 611.52 L 1146.00 612.43" stroke="#c45d35" stroke-width="4"/>
+  <path class="series" d="M 112.00 521.46 L 122.37 517.81 L 132.34 514.30 L 143.13 510.51 L 153.50 506.86 L 163.47 503.35 L 174.13 499.60 L 184.38 495.99 L 194.24 492.52 L 204.68 488.84 L 215.62 485.00 L 226.13 481.30 L 236.23 477.74 L 246.75 474.04 L 256.88 470.48 L 267.36 466.79 L 277.44 463.24 L 287.84 459.58 L 297.84 456.06 L 308.73 452.23 L 318.59 448.76 L 329.26 445.00 L 339.52 441.39 L 349.92 437.73 L 354.19 436.23 L 359.94 434.21 L 370.58 430.46 L 380.82 426.86 L 391.13 423.23 L 401.50 419.58 L 411.90 415.92 L 422.31 412.26 L 432.73 408.59 L 442.74 405.07 L 453.13 401.41 L 463.46 397.77 L 473.75 394.15 L 484.30 390.44 L 494.44 386.87 L 504.81 383.23 L 515.36 379.51 L 525.50 375.94 L 536.07 372.22 L 537.40 371.76 L 546.23 368.65 L 556.51 365.03 L 566.88 361.38 L 577.31 357.71 L 587.56 354.10 L 598.06 350.41 L 608.36 346.78 L 618.67 343.16 L 628.96 339.53 L 639.41 335.86 L 649.63 332.26 L 659.97 328.62 L 670.40 324.95 L 680.74 321.31 L 690.99 317.70 L 701.42 314.03 L 711.73 310.40 L 720.60 307.28 L 722.05 306.77 L 732.36 303.14 L 742.78 299.48 L 753.02 295.87 L 763.45 292.20 L 773.81 288.56 L 784.09 284.94 L 794.49 281.28 L 804.78 277.66 L 815.14 274.01 L 825.47 270.38 L 835.76 266.76 L 846.15 263.10 L 856.47 259.47 L 866.85 255.81 L 877.14 252.20 L 887.53 248.54 L 897.86 244.90 L 908.20 241.26 L 918.53 237.63 L 928.88 233.98 L 939.20 230.35 L 949.51 226.72 L 959.87 223.08 L 962.79 222.05 L 970.25 219.43 L 980.58 215.79 L 990.90 212.16 L 1001.25 208.52 L 1011.60 204.88 L 1021.94 201.24 L 1032.26 197.60 L 1042.58 193.97 L 1052.93 190.33 L 1063.29 186.68 L 1073.64 183.04 L 1083.96 179.41 L 1094.29 175.78 L 1104.63 172.14 L 1114.99 168.49 L 1125.31 164.86 L 1135.65 161.22 L 1146.00 157.58" stroke="#007c76" stroke-width="4"/>
+  <circle cx="112.00" cy="521.46" r="5.5" fill="#c45d35" stroke="#f3efe4" stroke-width="2.5"/>
+  <circle cx="112.00" cy="521.46" r="5.5" fill="#007c76" stroke="#f3efe4" stroke-width="2.5"/>
+  <circle cx="354.19" cy="542.77" r="5.5" fill="#c45d35" stroke="#f3efe4" stroke-width="2.5"/>
+  <circle cx="354.19" cy="436.23" r="5.5" fill="#007c76" stroke="#f3efe4" stroke-width="2.5"/>
+  <circle cx="537.40" cy="558.89" r="5.5" fill="#c45d35" stroke="#f3efe4" stroke-width="2.5"/>
+  <circle cx="537.40" cy="371.76" r="5.5" fill="#007c76" stroke="#f3efe4" stroke-width="2.5"/>
+  <circle cx="1146.00" cy="612.43" r="5.5" fill="#c45d35" stroke="#f3efe4" stroke-width="2.5"/>
+  <circle cx="1146.00" cy="157.58" r="5.5" fill="#007c76" stroke="#f3efe4" stroke-width="2.5"/>
+  <line x1="112" x2="154" y1="108" y2="108" stroke="#c45d35" stroke-width="4"/>
+  <text x="166.00" y="114.00" fill="#626862" font-size="16" font-weight="400" text-anchor="start">bandwidth fraction h₀ ∝ n⁻¹ᐟ⁵</text>
+  <line x1="552" x2="594" y1="108" y2="108" stroke="#007c76" stroke-width="4"/>
+  <text x="606.00" y="114.00" fill="#626862" font-size="16" font-weight="400" text-anchor="start">observations in window nh₀ ∝ n⁴ᐟ⁵</text>
+</svg>

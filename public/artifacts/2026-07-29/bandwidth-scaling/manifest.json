@@ -1,0 +1,87 @@
+{
+  "artifact_date": "2026-07-29",
+  "artifact_id": "derived-bandwidth-scaling-2026-07-29",
+  "artifact_type": "scientific_chart",
+  "caption": "If the problem-specific constant in h₀ is held fixed, h₀ ∝ n⁻¹ᐟ⁵ means the window occupies a slowly shrinking fraction of the series while its observation count nh₀ grows as n⁴ᐟ⁵. Both curves are normalized to one at n = 200. Derived plot—not observed or simulated data.",
+  "evidence": [
+    {
+      "confidence": "high as an algebraic consequence under the theorem's assumptions",
+      "source_id": "src-external-arxiv-1705-10046v1",
+      "source_locator": "PDF pages 8–9, equations (17), (20), and (21)",
+      "statement": "Equation (21) implies h₀(n)/h₀(200) = (n/200)⁻¹ᐟ⁵ and nh₀(n)/(200h₀(200)) = (n/200)⁴ᐟ⁵ when other constants are fixed.",
+      "status": "derived_from_stated_asymptotic_formula"
+    }
+  ],
+  "files": [
+    {
+      "bytes": 2473,
+      "media_type": "text/csv",
+      "role": "normalized derived values",
+      "sha256": "d4c4b1152600885edabd4f92de38651239af9bfae006be806f6f818b9b663306",
+      "url": "/artifacts/2026-07-29/bandwidth-scaling/bandwidth-scaling.csv"
+    },
+    {
+      "bytes": 365,
+      "media_type": "application/json",
+      "role": "declarative chart derivation",
+      "sha256": "b040ac98a10fabad371e9e8f4b3880350be42214a817a6c8daab839b718cbc4c",
+      "url": "/artifacts/2026-07-29/bandwidth-scaling/bandwidth-scaling.spec.json"
+    },
+    {
+      "bytes": 8606,
+      "media_type": "image/svg+xml",
+      "role": "responsive accessible rendered plot",
+      "sha256": "ac550f9a9c5e2e816028a24a2d78afa0b3809bcc7d0644678112d894913a4427",
+      "url": "/artifacts/2026-07-29/bandwidth-scaling/bandwidth-scaling.svg"
+    }
+  ],
+  "generator": {
+    "clock_dependent_fields": [],
+    "deterministic": true,
+    "language": "Python standard library",
+    "path": "scripts/generate_bandwidth_visuals.py",
+    "sha256": "4ea3ee74385af3717740cfef62313230baf3cf8d0c6c377ca380a583030aac92",
+    "source_files_executed": false,
+    "version": "1.0.0"
+  },
+  "limitations": [
+    "The curves are algebraic implications of h₀ ∝ n⁻¹ᐟ⁵, not bandwidths selected in the paper's simulations.",
+    "The comparison holds the model-, kernel-, and parameter-curve-dependent multiplicative constant fixed.",
+    "The n = 200 reference is a normalization choice only; it does not assert that h₀ or nh₀ equals one at n = 200.",
+    "Finite-sample admissible bandwidth grids and boundary handling can alter realized choices."
+  ],
+  "manifest_url": "/artifacts/2026-07-29/bandwidth-scaling/manifest.json",
+  "parameters": {
+    "normalization_reference_sample_size": 200,
+    "source_equations": [
+      17,
+      20,
+      21
+    ]
+  },
+  "related_pulse": "pulse-2026-07-29-1",
+  "relation_to_report": "This plot explains the practical meaning of Signal 01's bandwidth rate: locality strengthens with sample size even though the estimator can use more observations inside each local fit.",
+  "rights": {
+    "local_display_allowed": true,
+    "may_publish_publicly": false,
+    "public_deployment_requires_owner_approval": true,
+    "status": "project_generated_scientific_chart"
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "content_sha256": "30b0f6efeff168d41b0e5f4bb4b42116f2e26a0fbb0c83fd189a1e6498f7482a",
+      "execution_status": "not executed; equations transcribed and normalized",
+      "locators": [
+        "PDF page 8: equation (17)",
+        "PDF page 9: equations (20) and (21), Theorems 3.8 and 3.9"
+      ],
+      "path": "external/arxiv/1705.10046v1.pdf",
+      "rights_status": "unknown; no source media reproduced",
+      "role": "asymptotic bias-variance formula and bandwidth rate",
+      "source_id": "src-external-arxiv-1705-10046v1"
+    }
+  ],
+  "stable_url": "/artifacts/2026-07-29/bandwidth-scaling/bandwidth-scaling.svg",
+  "title": "A narrower fraction can still contain more observations"
+}

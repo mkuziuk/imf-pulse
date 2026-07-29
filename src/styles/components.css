@@ -392,6 +392,7 @@
 
 .scientific-chart__plot {
   min-height: 26.875rem;
+  overflow-x: auto;
   border-block: 1px solid var(--rule);
   background:
     linear-gradient(to bottom, transparent calc(100% - 1px), rgba(22, 26, 25, 0.035) 1px) 0 0 / 100% 3.2rem,
@@ -1489,9 +1490,14 @@
 
   .scientific-chart__plot,
   .scientific-chart__plot > svg,
-  .scientific-chart__plot > figure,
-  .scientific-chart__plot > img {
+  .scientific-chart__plot > figure {
     min-height: 19rem;
+  }
+
+  .scientific-chart__plot > img {
+    width: 44rem;
+    max-width: none;
+    min-height: 26.4rem;
   }
 
   .scientific-chart figcaption {

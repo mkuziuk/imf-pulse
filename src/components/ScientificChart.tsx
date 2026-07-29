@@ -163,14 +163,17 @@ export function ScientificChart({
 
   const showFallback = data.length === 0 || plotFailed;
   const fallback = fallbackSvgUrl && safeHref(fallbackSvgUrl);
+  const hasInteractiveData = data.length > 0;
 
   return (
     <figure className="scientific-chart" aria-labelledby={captionId}>
-      <div className="scientific-chart__legend" aria-label="Chart series">
-        <span data-series="single">Exact single-pass</span>
-        <span data-series="recursive">Exact recursive</span>
-        <span data-series="observed">Seed 777 recursive</span>
-      </div>
+      {hasInteractiveData ? (
+        <div className="scientific-chart__legend" aria-label="Chart series">
+          <span data-series="single">Exact single-pass</span>
+          <span data-series="recursive">Exact recursive</span>
+          <span data-series="observed">Seed 777 recursive</span>
+        </div>
+      ) : null}
       <div ref={plotRef} className="scientific-chart__plot" aria-live="off">
         {showFallback && fallback ? (
           <img src={withBaseUrl(fallback)} alt={summary} />
@@ -197,33 +200,35 @@ export function ScientificChart({
           ))}
         </nav>
       ) : null}
-      <details className="chart-data-table">
-        <summary>Exact values and accessible data table</summary>
-        <div className="table-scroll" tabIndex={0} role="region" aria-label={`${title} values`}>
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Stage</th>
-                <th scope="col">Window</th>
-                <th scope="col">Exact single-pass</th>
-                <th scope="col">Exact recursive</th>
-                <th scope="col">Seed 777 recursive</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((datum) => (
-                <tr key={datum.stage}>
-                  <th scope="row">{datum.stage}</th>
-                  <td>{datum.window ?? "—"}</td>
-                  <td>{valueLabel(datum.singlePass)}</td>
-                  <td>{valueLabel(datum.recursiveExact)}</td>
-                  <td>{valueLabel(datum.recursiveObserved)}</td>
+      {hasInteractiveData ? (
+        <details className="chart-data-table">
+          <summary>Exact values and accessible data table</summary>
+          <div className="table-scroll" tabIndex={0} role="region" aria-label={`${title} values`}>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Stage</th>
+                  <th scope="col">Window</th>
+                  <th scope="col">Exact single-pass</th>
+                  <th scope="col">Exact recursive</th>
+                  <th scope="col">Seed 777 recursive</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
+              </thead>
+              <tbody>
+                {data.map((datum) => (
+                  <tr key={datum.stage}>
+                    <th scope="row">{datum.stage}</th>
+                    <td>{datum.window ?? "—"}</td>
+                    <td>{valueLabel(datum.singlePass)}</td>
+                    <td>{valueLabel(datum.recursiveExact)}</td>
+                    <td>{valueLabel(datum.recursiveObserved)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ) : null}
     </figure>
   );
 }

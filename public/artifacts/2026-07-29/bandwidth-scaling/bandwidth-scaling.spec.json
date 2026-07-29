@@ -1,0 +1,16 @@
+{
+  "chart_type": "line",
+  "derivation": {
+    "relative_bandwidth_fraction": "(n / 200)^(-1/5)",
+    "relative_observations_in_window": "(n / 200)^(4/5)"
+  },
+  "normalization": "Both series equal one at n = 200.",
+  "schema_version": 1,
+  "source": {
+    "equation": 21,
+    "pdf_pages": [
+      9
+    ],
+    "source_id": "src-external-arxiv-1705-10046v1"
+  }
+}
