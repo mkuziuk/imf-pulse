@@ -32,7 +32,7 @@ Prepare at most one schema `2.0.0` package:
    one to three knowledge records total across `claims`, `methods`,
    `experiments`, and `relationships`, and include exactly one pulse signal for
    every knowledge record. Do not add background knowledge records that are
-   absent from the pulse signals.
+   absent from the pulse signals. Write `pulse.lead` as exactly one sentence.
 4. Read `GENERATED-VISUAL.json` and copy its single `generated_image` artifact
    exactly into `artifacts`. Do not use a diagram, chart, flowchart, source
    figure, screenshot, or any other visual. The trusted host generated and
