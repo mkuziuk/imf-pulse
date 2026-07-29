@@ -21,9 +21,12 @@ Prepare at most one schema `2.0.0` package:
    genuinely coherent synthesis. Copy each candidate id, hash, batch id, title,
    authors, canonical URL, and publication date exactly from `bundle.json`.
 2. Use only the bound PDF hash, logical path, and page extracts in the bundle.
-   Every scientific statement must resolve to an exact page locator. Clearly
-   distinguish paper claims, experiments, interpretation, assumptions, and
-   limitations.
+   For every `sources` entry, set `relative_path` (not `path`) to the exact
+   `evidence.logical_path` from `bundle.json`. Every scientific statement must
+   resolve to an exact page locator. Clearly distinguish paper claims,
+   experiments, interpretation, assumptions, and limitations. In
+   `pulse.source_citations`, include exactly one citation object per selected
+   source; combine multiple relevant page ranges in that object's `locator`.
 3. Set `editor.mode` to `automatic_fail_closed`, `editor.model` to
    `gpt-5.6-sol`, and explain why the selected work is materially novel.
 4. Read `GENERATED-VISUAL.json` and copy its single `generated_image` artifact
